@@ -146,9 +146,9 @@
                                         <li><b>Setup:</b> The host sets the game rules in the waiting room.</li>
                                         <li><b>Check Word:</b> Secretly check your assigned word. You won't be told your role!</li>
                                         <li><b>Talk Time:</b> Discuss the topic to find the wolf.</li>
-                                        <li><b>Question Time:</b> One by one, ask a question or skip your turn.</li>
+                                        <li><b>Question Time:</b> One by one, ask another player a question that must be answered with "Yes" or "No".</li>
                                         <li><b>Final Talk Time:</b> One last chance to discuss before the vote.</li>
-                                        <li><b>Vote:</b> Vote for who you think is the Wolf.</li>
+                                        <li><b>Vote:</b> Select a player and confirm your vote.</li>
                                         <li><b>Result:</b> See who was eliminated and if the game ends!</li>
                                     </ol>
                                 </div>
@@ -294,14 +294,21 @@
                 }
                 const voteButtonsHTML = Object.values(room.players)
                     .filter(p => !p.isEliminated)
-                    .map(p => `<button class="btn btn-secondary w-full" data-vote-id="${p.id}" ${p.id === localState.userId ? 'disabled' : ''}>${p.name}</button>`)
+                    .map(p => `<button class="btn btn-secondary w-full" data-vote-id="${p.id}" data-vote-name="${p.name}" ${p.id === localState.userId ? 'disabled' : ''}>${p.name}</button>`)
                     .join('');
                 return `
                     <div class="screen">
                         <div class="card text-center">
                             <h2 class="text-3xl font-bold mb-4">Vote Time (Round ${room.currentTurn})</h2>
                             <p class="text-gray-400 mb-6">Who do you think is the Wolf?</p>
-                            <div class="grid grid-cols-2 sm:grid-cols-3 gap-3">${voteButtonsHTML}</div>
+                            <div id="vote-buttons-container" class="grid grid-cols-2 sm:grid-cols-3 gap-3">${voteButtonsHTML}</div>
+                            <div id="vote-confirmation-area" class="hidden mt-6 space-y-4 border-t border-gray-700 pt-4">
+                                <p id="vote-confirm-text" class="text-lg"></p>
+                                <div class="flex gap-4">
+                                    <button id="confirm-vote-btn" class="btn btn-primary w-full">Confirm</button>
+                                    <button id="cancel-vote-btn" class="btn btn-secondary w-full">Cancel</button>
+                                </div>
+                            </div>
                         </div>
                     </div>
                 `;
@@ -410,6 +417,7 @@
                 if (!timerDisplay) return;
 
                 const nextState = room.gameState === 'talk_time' ? 'question_time' : 'voting';
+                const timeDuration = room.gameState === 'talk_time' ? room.settings.talkTime : room.settings.finalTalkTime;
 
                 localState.timerInterval = setInterval(async () => {
                     if (!room.phaseEndTime) return;
@@ -609,11 +617,41 @@
             }
 
             function addVotingListeners(room) {
+                let selectedVoteId = null;
+                const voteButtonsContainer = document.getElementById('vote-buttons-container');
+                const confirmationArea = document.getElementById('vote-confirmation-area');
+                const confirmText = document.getElementById('vote-confirm-text');
+                const confirmBtn = document.getElementById('confirm-vote-btn');
+                const cancelBtn = document.getElementById('cancel-vote-btn');
+
                 document.querySelectorAll('[data-vote-id]').forEach(button => {
                     button.addEventListener('click', (e) => {
-                        const votedId = e.currentTarget.dataset.voteId;
-                        handleVote(votedId, room);
+                        selectedVoteId = e.currentTarget.dataset.voteId;
+                        const selectedName = e.currentTarget.dataset.voteName;
+                        
+                        document.querySelectorAll('[data-vote-id]').forEach(btn => btn.disabled = true);
+                        e.currentTarget.classList.remove('btn-secondary');
+                        e.currentTarget.classList.add('btn-primary');
+
+                        confirmText.textContent = `Vote for ${selectedName}?`;
+                        confirmationArea.classList.remove('hidden');
                     });
+                });
+
+                cancelBtn.addEventListener('click', () => {
+                    selectedVoteId = null;
+                    document.querySelectorAll('[data-vote-id]').forEach(btn => {
+                        btn.disabled = (btn.dataset.voteId === localState.userId);
+                        btn.classList.remove('btn-primary');
+                        btn.classList.add('btn-secondary');
+                    });
+                    confirmationArea.classList.add('hidden');
+                });
+
+                confirmBtn.addEventListener('click', () => {
+                    if (selectedVoteId) {
+                        handleVote(selectedVoteId, room);
+                    }
                 });
             }
 
