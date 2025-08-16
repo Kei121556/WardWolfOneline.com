@@ -66,16 +66,15 @@
     <!-- Firebase SDK -->
     <script type="module">
         // =================================================================================
-        // STEP 1: Firebaseのセットアップ
+        // あなたのFirebaseプロジェクト設定情報
         // =================================================================================
-        // ここに、あなたのFirebaseプロジェクトの設定情報を貼り付けてください。
         const firebaseConfig = {
-            apiKey: "YOUR_API_KEY",
-            authDomain: "YOUR_AUTH_DOMAIN",
-            projectId: "YOUR_PROJECT_ID",
-            storageBucket: "YOUR_STORAGE_BUCKET",
-            messagingSenderId: "YOUR_MESSAGING_SENDER_ID",
-            appId: "YOUR_APP_ID"
+            apiKey: "AIzaSyB8AfXF8pVOQpW912jrBOuTzyB3BnUMHtc",
+            authDomain: "wordwolfonline-com.firebaseapp.com",
+            projectId: "wordwolfonline-com",
+            storageBucket: "wordwolfonline-com.appspot.com",
+            messagingSenderId: "831273321343",
+            appId: "1:831273321343:web:c43481ad7b5cabf216504a"
         };
         // =================================================================================
 
@@ -199,6 +198,7 @@
                         render(getWaitingRoomHTML(roomData));
                         addWaitingRoomListeners(roomData);
                     }
+                    // Add other game states here
                 } else {
                     alert("The room has been closed.");
                     if(localState.roomUnsubscribe) localState.roomUnsubscribe();
