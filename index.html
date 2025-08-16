@@ -146,6 +146,7 @@
                                         <li><b>Setup:</b> The host sets the game rules in the waiting room.</li>
                                         <li><b>Check Word:</b> Secretly check your assigned word. You won't be told your role!</li>
                                         <li><b>Talk Time:</b> Discuss the topic to find the wolf.</li>
+                                        <li><b>Question Time:</b> One by one, ask a question or skip your turn.</li>
                                         <li><b>Vote:</b> Vote for who you think is the Wolf.</li>
                                         <li><b>Result:</b> See who was eliminated and if the game ends!</li>
                                     </ol>
@@ -242,6 +243,28 @@
                             <div id="timer-display" class="timer text-violet-400 mb-6">03:00</div>
                             <p class="font-medium mb-2">Participants</p>
                             <div class="flex flex-wrap justify-center gap-2">${playersHTML}</div>
+                        </div>
+                    </div>
+                `;
+            }
+
+            function getQuestionTimeHTML(room) {
+                const questionerId = room.questionerOrder[room.currentQuestionerIndex];
+                const questioner = room.players[questionerId];
+                const isMyTurn = questionerId === localState.userId;
+
+                return `
+                    <div class="screen">
+                        <div class="card text-center">
+                            <h2 class="text-3xl font-bold mb-4">Question Time</h2>
+                            <p class="text-gray-400 mb-6">It's <span class="font-bold text-violet-400">${questioner.name}'s</span> turn to ask a question.</p>
+                            ${isMyTurn ? `
+                                <p class="mb-4">Ask one person a question, or skip your turn.</p>
+                                <div class="flex gap-4">
+                                    <button id="next-questioner-btn" class="btn btn-primary w-full">Next Questioner</button>
+                                    <button id="skip-question-btn" class="btn btn-secondary w-full">Skip</button>
+                                </div>
+                            ` : ''}
                         </div>
                     </div>
                 `;
@@ -347,12 +370,16 @@
                     updatedPlayers[id].role = roles[index];
                     updatedPlayers[id].word = roles[index] === 'wolf' ? wordB : wordA;
                 });
+                
+                const questionerOrder = [...playerIds].sort(() => Math.random() - 0.5);
 
                 await updateDoc(roomRef, {
                     gameState: 'role_assignment',
                     players: updatedPlayers,
                     words: { citizen: wordA, wolf: wordB },
                     currentTurn: 1,
+                    questionerOrder: questionerOrder,
+                    currentQuestionerIndex: 0,
                 });
             }
 
@@ -371,7 +398,7 @@
                     if (remaining <= 0 && localState.isHost) {
                         clearInterval(localState.timerInterval);
                         const roomRef = doc(db, "rooms", room.id);
-                        await updateDoc(roomRef, { gameState: 'voting' });
+                        await updateDoc(roomRef, { gameState: 'question_time' });
                     }
                 }, 500);
             }
@@ -411,6 +438,10 @@
                         case 'talk_time':
                             render(getTalkTimeHTML(roomData));
                             handleTimer(roomData);
+                            break;
+                        case 'question_time':
+                            render(getQuestionTimeHTML(roomData));
+                            addQuestionTimeListeners(roomData);
                             break;
                         case 'voting':
                             render(getVotingHTML(roomData));
@@ -494,6 +525,25 @@
                 document.getElementById('ack-word-btn').addEventListener('click', () => handleAcknowledgement(room));
             }
 
+            async function handleQuestionTurn(room, skip = false) {
+                const roomRef = doc(db, "rooms", room.id);
+                const nextIndex = room.currentQuestionerIndex + 1;
+                
+                if (nextIndex >= room.questionerOrder.length) {
+                    await updateDoc(roomRef, { gameState: 'voting' });
+                } else {
+                    await updateDoc(roomRef, { currentQuestionerIndex: nextIndex });
+                }
+            }
+
+            function addQuestionTimeListeners(room) {
+                const isMyTurn = room.questionerOrder[room.currentQuestionerIndex] === localState.userId;
+                if (isMyTurn) {
+                    document.getElementById('next-questioner-btn').addEventListener('click', () => handleQuestionTurn(room));
+                    document.getElementById('skip-question-btn').addEventListener('click', () => handleQuestionTurn(room, true));
+                }
+            }
+
             async function handleVote(votedId, room) {
                 const roomRef = doc(db, "rooms", room.id);
                 const currentVotes = room.players[votedId].votes || 0;
@@ -572,11 +622,14 @@
                     } else {
                         const talkTimeInSeconds = 180;
                         const phaseEndTime = new Date(Date.now() + talkTimeInSeconds * 1000);
+                        const newQuestionerOrder = remainingPlayers.map(p => p.id).sort(() => Math.random() - 0.5);
                         await updateDoc(roomRef, { 
                             gameState: 'talk_time',
                             phaseEndTime: phaseEndTime,
                             lastEliminatedId: null,
-                            currentTurn: currentTurn + 1
+                            currentTurn: currentTurn + 1,
+                            questionerOrder: newQuestionerOrder,
+                            currentQuestionerIndex: 0
                         });
                     }
                 });
@@ -602,6 +655,8 @@
                         winner: null,
                         words: null,
                         currentTurn: null,
+                        questionerOrder: null,
+                        currentQuestionerIndex: null,
                     });
                 });
             }
