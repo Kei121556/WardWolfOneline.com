@@ -336,6 +336,24 @@
                 `;
             }
             
+            function getWolfGuessHTML(room) {
+                const guessingWolf = room.players[room.lastEliminatedId];
+                const isMyTurn = localState.userId === guessingWolf.id;
+
+                return `
+                    <div class="screen">
+                        <div class="card text-center">
+                            <h2 class="text-3xl font-bold mb-2">Wolf's Final Guess!</h2>
+                            <p class="text-gray-400 mb-6">${guessingWolf.name}, guess the Citizen's word for a comeback victory!</p>
+                            ${isMyTurn ? `
+                                <input id="wolf-guess-input" type="text" class="form-input text-center mb-4" placeholder="Enter Citizen's word">
+                                <button id="submit-guess-btn" class="btn btn-primary w-full">Submit Guess</button>
+                            ` : `<p>Waiting for ${guessingWolf.name} to guess...</p>`}
+                        </div>
+                    </div>
+                `;
+            }
+
             function getEndGameHTML(room) {
                 return `
                     <div class="screen">
@@ -483,6 +501,10 @@
                         case 'results':
                             render(getResultsHTML(roomData));
                             addResultsListeners(roomData);
+                            break;
+                        case 'wolf_guess':
+                            render(getWolfGuessHTML(roomData));
+                            addWolfGuessListeners(roomData);
                             break;
                         case 'end_game':
                             render(getEndGameHTML(roomData));
@@ -697,6 +719,11 @@
                     const remainingCitizens = remainingPlayers.length - remainingWolves;
                     const currentTurn = room.currentTurn || 1;
                     const maxTurns = room.settings.turnCount || 3;
+                    
+                    if (room.lastEliminatedId && room.players[room.lastEliminatedId].role === 'wolf' && remainingWolves === 0 && room.settings.wolfCount === 1) {
+                        await updateDoc(roomRef, { gameState: 'wolf_guess' });
+                        return;
+                    }
 
                     if (remainingWolves === 0) {
                         await updateDoc(roomRef, { gameState: 'end_game', winner: 'citizens' });
@@ -716,6 +743,19 @@
                             questionerOrder: newQuestionerOrder,
                             currentQuestionerIndex: 0
                         });
+                    }
+                });
+            }
+
+            function addWolfGuessListeners(room) {
+                if (localState.userId !== room.lastEliminatedId) return;
+                document.getElementById('submit-guess-btn').addEventListener('click', async () => {
+                    const guess = document.getElementById('wolf-guess-input').value.trim();
+                    const roomRef = doc(db, "rooms", room.id);
+                    if (guess.toLowerCase() === room.words.citizen.toLowerCase()) {
+                        await updateDoc(roomRef, { gameState: 'end_game', winner: 'wolves' });
+                    } else {
+                        await updateDoc(roomRef, { gameState: 'end_game', winner: 'citizens' });
                     }
                 });
             }
