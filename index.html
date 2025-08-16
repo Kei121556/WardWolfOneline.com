@@ -392,10 +392,10 @@
                 if (settings.topic === 'custom') {
                     const customPairs = [];
                     document.querySelectorAll('.custom-pair').forEach(pairEl => {
-                        const citizenWord = pairEl.querySelector('.citizen-word').value.trim();
-                        const wolfWord = pairEl.querySelector('.wolf-word').value.trim();
-                        if (citizenWord && wolfWord) {
-                            customPairs.push([citizenWord, wolfWord]);
+                        const word1 = pairEl.querySelector('.word1').value.trim();
+                        const word2 = pairEl.querySelector('.word2').value.trim();
+                        if (word1 && word2) {
+                            customPairs.push([word1, word2]);
                         }
                     });
 
@@ -557,8 +557,8 @@
                         const pairDiv = document.createElement('div');
                         pairDiv.className = 'custom-pair flex items-center gap-2 mt-2';
                         pairDiv.innerHTML = `
-                            <input type="text" class="form-input citizen-word" placeholder="Citizen Word">
-                            <input type="text" class="form-input wolf-word" placeholder="Wolf Word">
+                            <input type="text" class="form-input word1" placeholder="Word 1">
+                            <input type="text" class="form-input word2" placeholder="Word 2">
                             <button class="btn btn-secondary p-2 remove-pair-btn">X</button>
                         `;
                         container.appendChild(pairDiv);
