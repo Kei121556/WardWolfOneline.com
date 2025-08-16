@@ -412,6 +412,7 @@
                 const nextState = room.gameState === 'talk_time' ? 'question_time' : 'voting';
 
                 localState.timerInterval = setInterval(async () => {
+                    if (!room.phaseEndTime) return;
                     const serverTime = room.phaseEndTime.toMillis();
                     const remaining = Math.max(0, Math.round((serverTime - Date.now()) / 1000));
                     const minutes = String(Math.floor(remaining / 60)).padStart(2, '0');
@@ -533,7 +534,7 @@
                         container.appendChild(pairDiv);
                         pairDiv.querySelector('.remove-pair-btn').addEventListener('click', () => pairDiv.remove());
                     });
-                    // Add one pair initially
+                    
                     if (document.querySelectorAll('.custom-pair').length === 0) {
                          document.getElementById('add-pair-btn').click();
                     }
