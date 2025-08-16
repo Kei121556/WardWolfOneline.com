@@ -400,7 +400,6 @@
                             addWaitingRoomListeners(roomData);
                             break;
                         case 'role_assignment':
-                            const me = roomData.players[localState.userId];
                             if (localState.isHost) {
                                 const allAckd = Object.values(roomData.players).every(p => p.acknowledged);
                                 if (allAckd) {
@@ -414,6 +413,7 @@
                                     return; 
                                 }
                             }
+                            const me = roomData.players[localState.userId];
                             if (me.acknowledged) {
                                 render(`<div class="screen"><div class="card text-center"><p class="text-xl">Waiting for others to confirm...</p></div></div>`);
                             } else {
