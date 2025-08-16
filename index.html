@@ -144,7 +144,7 @@
                                     <h2 class="text-xl font-bold mb-2 text-violet-400">Game Flow</h2>
                                     <ol class="list-decimal rules-list space-y-2 text-gray-300">
                                         <li><b>Setup:</b> The host sets the game rules in the waiting room.</li>
-                                        <li><b>Check Word:</b> Secretly check your assigned word and role.</li>
+                                        <li><b>Check Word:</b> Secretly check your assigned word. You won't be told your role!</li>
                                         <li><b>Talk Time:</b> Discuss the topic to find the wolf.</li>
                                         <li><b>Vote:</b> Vote for who you think is the Wolf.</li>
                                         <li><b>Result:</b> See who was eliminated and if the game ends!</li>
@@ -188,9 +188,15 @@
                                             <option value="ja" ${room.settings.language === 'ja' ? 'selected' : ''}>日本語</option>
                                         </select>
                                     </div>
-                                    <div>
-                                        <label for="wolf-count" class="font-medium">Wolf Count</label>
-                                        <input id="wolf-count" type="number" class="form-input" value="${room.settings.wolfCount}" min="1">
+                                    <div class="grid grid-cols-2 gap-4">
+                                        <div>
+                                            <label for="wolf-count" class="font-medium">Wolf Count</label>
+                                            <input id="wolf-count" type="number" class="form-input" value="${room.settings.wolfCount}" min="1">
+                                        </div>
+                                        <div>
+                                            <label for="turn-count" class="font-medium">Rounds</label>
+                                            <input id="turn-count" type="number" class="form-input" value="${room.settings.turnCount}" min="1" max="5">
+                                        </div>
                                     </div>
                                     <div>
                                         <label for="topic" class="font-medium">Topic</label>
@@ -216,9 +222,7 @@
                 return `
                     <div class="screen">
                         <div class="card text-center">
-                            <p class="text-gray-400">Your Role</p>
-                            <p class="text-3xl font-bold ${me.role === 'wolf' ? 'text-red-500' : 'text-blue-500'}">${me.role}</p>
-                            <p class="text-gray-400 mt-6">Your Word</p>
+                            <p class="text-gray-400 mt-6">Your Word is</p>
                             <p class="text-4xl font-bold text-violet-400 my-4">${me.word}</p>
                             <button id="ack-word-btn" class="btn btn-primary w-full">I Understand</button>
                         </div>
@@ -234,7 +238,7 @@
                 return `
                     <div class="screen">
                         <div class="card text-center w-full max-w-2xl">
-                            <p class="text-2xl font-bold mb-4">Talk Time</p>
+                            <p class="text-2xl font-bold mb-4">Talk Time (Round ${room.currentTurn})</p>
                             <div id="timer-display" class="timer text-violet-400 mb-6">03:00</div>
                             <p class="font-medium mb-2">Participants</p>
                             <div class="flex flex-wrap justify-center gap-2">${playersHTML}</div>
@@ -258,7 +262,7 @@
                 return `
                     <div class="screen">
                         <div class="card text-center">
-                            <h2 class="text-3xl font-bold mb-4">Vote Time</h2>
+                            <h2 class="text-3xl font-bold mb-4">Vote Time (Round ${room.currentTurn})</h2>
                             <p class="text-gray-400 mb-6">Who do you think is the Wolf?</p>
                             <div class="grid grid-cols-2 sm:grid-cols-3 gap-3">${voteButtonsHTML}</div>
                         </div>
@@ -347,7 +351,8 @@
                 await updateDoc(roomRef, {
                     gameState: 'role_assignment',
                     players: updatedPlayers,
-                    words: { citizen: wordA, wolf: wordB }
+                    words: { citizen: wordA, wolf: wordB },
+                    currentTurn: 1,
                 });
             }
 
@@ -396,6 +401,19 @@
                             break;
                         case 'role_assignment':
                             const me = roomData.players[localState.userId];
+                            if (localState.isHost) {
+                                const allAckd = Object.values(roomData.players).every(p => p.acknowledged);
+                                if (allAckd) {
+                                    const talkTimeInSeconds = 180;
+                                    const phaseEndTime = new Date(Date.now() + talkTimeInSeconds * 1000);
+                                    const roomRef = doc(db, "rooms", roomData.id);
+                                    updateDoc(roomRef, { 
+                                        gameState: 'talk_time',
+                                        phaseEndTime: phaseEndTime
+                                    });
+                                    return; 
+                                }
+                            }
                             if (me.acknowledged) {
                                 render(`<div class="screen"><div class="card text-center"><p class="text-xl">Waiting for others to confirm...</p></div></div>`);
                             } else {
@@ -408,6 +426,13 @@
                             handleTimer(roomData);
                             break;
                         case 'voting':
+                             if (localState.isHost) {
+                                const allVoted = Object.values(roomData.players).filter(p => !p.isEliminated).every(p => p.hasVoted);
+                                if (allVoted) {
+                                    tallyVotesAndProceed(roomData);
+                                    return;
+                                }
+                            }
                             render(getVotingHTML(roomData));
                             addVotingListeners(roomData);
                             break;
@@ -444,6 +469,7 @@
                         const roomRef = doc(db, "rooms", room.id);
                         await updateDoc(roomRef, {
                             "settings.wolfCount": parseInt(document.getElementById('wolf-count').value) || 1,
+                            "settings.turnCount": parseInt(document.getElementById('turn-count').value) || 3,
                             "settings.topic": document.getElementById('topic').value,
                             "settings.language": document.getElementById('language').value,
                         });
@@ -451,6 +477,7 @@
                     
                     document.getElementById('language').addEventListener('change', updateSettings);
                     document.getElementById('wolf-count').addEventListener('change', updateSettings);
+                    document.getElementById('turn-count').addEventListener('change', updateSettings);
                     document.getElementById('topic').addEventListener('change', () => {
                         document.getElementById('custom-topic-area').classList.toggle('hidden', document.getElementById('topic').value !== 'custom');
                         updateSettings();
@@ -469,19 +496,6 @@
                 document.getElementById('ack-word-btn').addEventListener('click', async () => {
                     const roomRef = doc(db, "rooms", room.id);
                     await updateDoc(roomRef, { [`players.${localState.userId}.acknowledged`]: true });
-
-                    const updatedRoomSnap = await getDoc(roomRef);
-                    const updatedRoom = updatedRoomSnap.data();
-
-                    const allAckd = Object.values(updatedRoom.players).every(p => p.acknowledged);
-                    if (allAckd && localState.isHost) {
-                        const talkTimeInSeconds = 180;
-                        const phaseEndTime = new Date(Date.now() + talkTimeInSeconds * 1000);
-                        await updateDoc(roomRef, { 
-                            gameState: 'talk_time',
-                            phaseEndTime: phaseEndTime
-                        });
-                    }
                 });
             }
 
@@ -490,50 +504,45 @@
                     button.addEventListener('click', async (e) => {
                         const votedId = e.currentTarget.dataset.voteId;
                         const roomRef = doc(db, "rooms", room.id);
-                        
                         const currentVotes = room.players[votedId].votes || 0;
-                        
                         await updateDoc(roomRef, {
                             [`players.${localState.userId}.hasVoted`]: true,
                             [`players.${votedId}.votes`]: currentVotes + 1
                         });
-
-                        const updatedRoomSnap = await getDoc(roomRef);
-                        const updatedRoom = updatedRoomSnap.data();
-
-                        const allVoted = Object.values(updatedRoom.players).filter(p => !p.isEliminated).every(p => p.hasVoted);
-                        if (allVoted && localState.isHost) {
-                            let maxVotes = -1;
-                            let mostVotedIds = [];
-                            Object.values(updatedRoom.players).forEach(p => {
-                                const pVotes = p.votes || 0;
-                                if (pVotes > maxVotes) {
-                                    maxVotes = pVotes;
-                                    mostVotedIds = [p.id];
-                                } else if (pVotes === maxVotes) {
-                                    mostVotedIds.push(p.id);
-                                }
-                            });
-                            
-                            let lastEliminatedId = null;
-                            if (mostVotedIds.length === 1 && maxVotes > 0) {
-                                lastEliminatedId = mostVotedIds[0];
-                            }
-
-                            const updatePayload = { gameState: 'results', lastEliminatedId };
-                            if(lastEliminatedId) {
-                                updatePayload[`players.${lastEliminatedId}.isEliminated`] = true;
-                            }
-                            
-                            Object.keys(updatedRoom.players).forEach(id => {
-                                updatePayload[`players.${id}.votes`] = 0;
-                                updatePayload[`players.${id}.hasVoted`] = false;
-                            });
-
-                            await updateDoc(roomRef, updatePayload);
-                        }
                     });
                 });
+            }
+
+            async function tallyVotesAndProceed(room) {
+                const roomRef = doc(db, "rooms", room.id);
+                let maxVotes = -1;
+                let mostVotedIds = [];
+                Object.values(room.players).filter(p => !p.isEliminated).forEach(p => {
+                    const pVotes = p.votes || 0;
+                    if (pVotes > maxVotes) {
+                        maxVotes = pVotes;
+                        mostVotedIds = [p.id];
+                    } else if (pVotes === maxVotes) {
+                        mostVotedIds.push(p.id);
+                    }
+                });
+                
+                let lastEliminatedId = null;
+                if (mostVotedIds.length === 1 && maxVotes > 0) {
+                    lastEliminatedId = mostVotedIds[0];
+                }
+
+                const updatePayload = { gameState: 'results', lastEliminatedId };
+                if(lastEliminatedId) {
+                    updatePayload[`players.${lastEliminatedId}.isEliminated`] = true;
+                }
+                
+                Object.keys(room.players).forEach(id => {
+                    updatePayload[`players.${id}.votes`] = 0;
+                    updatePayload[`players.${id}.hasVoted`] = false;
+                });
+
+                await updateDoc(roomRef, updatePayload);
             }
 
             function addResultsListeners(room) {
@@ -544,10 +553,14 @@
                     const remainingPlayers = Object.values(room.players).filter(p => !p.isEliminated);
                     const remainingWolves = remainingPlayers.filter(p => p.role === 'wolf').length;
                     const remainingCitizens = remainingPlayers.length - remainingWolves;
+                    const currentTurn = room.currentTurn || 1;
+                    const maxTurns = room.settings.turnCount || 3;
 
                     if (remainingWolves === 0) {
                         await updateDoc(roomRef, { gameState: 'end_game', winner: 'citizens' });
                     } else if (remainingWolves >= remainingCitizens) {
+                        await updateDoc(roomRef, { gameState: 'end_game', winner: 'wolves' });
+                    } else if (currentTurn >= maxTurns) {
                         await updateDoc(roomRef, { gameState: 'end_game', winner: 'wolves' });
                     } else {
                         const talkTimeInSeconds = 180;
@@ -555,7 +568,8 @@
                         await updateDoc(roomRef, { 
                             gameState: 'talk_time',
                             phaseEndTime: phaseEndTime,
-                            lastEliminatedId: null
+                            lastEliminatedId: null,
+                            currentTurn: currentTurn + 1
                         });
                     }
                 });
@@ -580,6 +594,7 @@
                         lastEliminatedId: null,
                         winner: null,
                         words: null,
+                        currentTurn: null,
                     });
                 });
             }
@@ -615,7 +630,7 @@
                     hostId: localState.userId,
                     gameState: 'waiting',
                     players: newPlayer,
-                    settings: { wolfCount: 1, topic: 'food', language: 'en' }
+                    settings: { wolfCount: 1, topic: 'food', language: 'en', turnCount: 3 }
                 });
                 attachRoomListener(roomId);
             }
