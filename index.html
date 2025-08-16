@@ -33,7 +33,6 @@
             box-sizing: border-box;
             transition: opacity 0.5s ease-in-out;
         }
-        .screen.hidden { display: none; }
         .card {
             background-color: var(--card-bg);
             border-radius: 1rem;
@@ -51,23 +50,22 @@
         .btn:disabled { opacity: 0.5; cursor: not-allowed; }
         .btn-primary { background-color: var(--primary-color); color: white; }
         .btn-primary:hover:not(:disabled) { background-color: #6d28d9; }
-        .form-input {
+        .btn-secondary { background-color: #374151; color: white; }
+        .btn-secondary:hover:not(:disabled) { background-color: #4b5563; }
+        .form-input, .form-select {
             width: 100%; padding: 0.5rem 0.75rem; border-radius: 0.5rem;
-            background-color: #374151; border: 1px solid #4b5563; color: white;
+            background-color: #374151; border: 1px solid #4b5563; color: white; margin-top: 0.25rem;
         }
+        .timer { font-size: 4rem; font-weight: 700; line-height: 1; font-variant-numeric: tabular-nums; }
+        @media (min-width: 640px) { .timer { font-size: 6rem; } }
+        .rules-list { list-style-position: inside; text-align: left; }
+        .rules-list li { margin-bottom: 0.5rem; }
     </style>
 </head>
 <body>
-    <!-- App Container -->
-    <div id="app-container">
-        <!-- All screens will be rendered here by JavaScript -->
-    </div>
+    <div id="app-container"></div>
 
-    <!-- Firebase SDK -->
     <script type="module">
-        // =================================================================================
-        // あなたのFirebaseプロジェクト設定情報（修正済み）
-        // =================================================================================
         const firebaseConfig = {
             apiKey: "AIzaSyB8AfXF8pVOQpW912jrBOuTzyB3BnUMHtc",
             authDomain: "wordwolfonline-com.firebaseapp.com",
@@ -76,35 +74,69 @@
             messagingSenderId: "831273321343",
             appId: "1:831273321343:web:c43481ad7b5cabf216504a"
         };
-        // =================================================================================
 
-        // Firebaseの機能をインポート
         import { initializeApp } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-app.js";
         import { getFirestore, doc, setDoc, getDoc, updateDoc, onSnapshot, serverTimestamp, deleteDoc } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-firestore.js";
         import { getAuth, signInAnonymously, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-auth.js";
 
-        // Firebaseを初期化
         const app = initializeApp(firebaseConfig);
         const db = getFirestore(app);
         const auth = getAuth(app);
 
-        // --- Global State ---
         let localState = {
             userId: null,
             playerName: localStorage.getItem('playerName') || '',
             roomId: null,
             isHost: false,
             roomUnsubscribe: null,
+            timerInterval: null,
         };
 
         const appContainer = document.getElementById('app-container');
 
-        // --- UI Rendering Engine ---
-        function render(html) {
-            appContainer.innerHTML = html;
-        }
+        // --- DATA ---
+        const TOPICS_EN = {
+            food: [["Curry", "Stew"], ["Udon", "Soba"], ["Beer", "Low-malt Beer"], ["Apple", "Pear"], ["Macaron", "Fatcaron"], ["Sushi", "Sashimi"], ["Coffee", "Tea"], ["Steak", "Hamburger"], ["Pasta", "Pizza"], ["Pancake", "Waffle"], ["Chocolate", "Caramel"], ["Cheese", "Butter"]],
+            places: [["Tokyo Tower", "Skytree"], ["Disneyland", "DisneySea"], ["Kinkaku-ji", "Ginkaku-ji"], ["Ocean", "River"], ["Convenience Store", "Supermarket"], ["Mountain", "Volcano"], ["School", "Hospital"], ["Museum", "Art Gallery"], ["Airport", "Train Station"], ["Park", "Garden"], ["Library", "Bookstore"], ["Cafe", "Restaurant"]],
+            people: [["Actor", "Voice Actor"], ["Santa Claus", "Reindeer"], ["Teacher", "Student"], ["King", "President"], ["Scientist", "Inventor"], ["Artist", "Musician"], ["Chef", "Pâtissier"], ["Athlete", "Coach"], ["Detective", "Police Officer"], ["YouTuber", "Streamer"], ["Pilot", "Astronaut"], ["Farmer", "Gardener"]],
+            actions: [["Running", "Jogging"], ["Cooking", "Eating"], ["Sleeping", "Napping"], ["Studying", "Working"], ["Clapping", "Hand clapping"], ["Singing", "Dancing"], ["Reading", "Writing"], ["Drawing", "Painting"], ["Laughing", "Crying"], ["Walking", "Hiking"], ["Push", "Pull"], ["Throw", "Catch"]],
+            things: [["Smartphone", "Cellphone"], ["Shampoo", "Conditioner"], ["PC", "Laptop"], ["Pencil", "Mechanical Pencil"], ["Umbrella", "Parasol"], ["Chair", "Sofa"], ["Book", "Magazine"], ["Key", "Lock"], ["Watch", "Clock"], ["Glasses", "Sunglasses"], ["Spoon", "Fork"], ["Towel", "Blanket"]],
+            sports: [["Soccer", "Futsal"], ["Baseball", "Softball"], ["Tennis", "Badminton"], ["Table Tennis", "Ping-Pong"], ["Swimming", "Diving"], ["Skiing", "Snowboarding"], ["Basketball", "Volleyball"], ["Judo", "Karate"], ["Golf", "Bowling"], ["Boxing", "Wrestling"], ["Skateboarding", "Surfing"], ["Archery", "Darts"]],
+            entertainment: [["Movie", "Drama"], ["Manga", "Anime"], ["Theater", "Musical"], ["YouTube", "TikTok"], ["Concert", "Festival"], ["Comedy", "Tragedy"], ["Radio", "Podcast"], ["Circus", "Magic Show"], ["Ballet", "Opera"], ["Video Game", "Arcade Game"], ["Novel", "Poem"], ["Sculpture", "Painting"]],
+            animals: [["Dog", "Cat"], ["Lion", "Tiger"], ["Dolphin", "Whale"], ["Hamster", "Guinea Pig"], ["Horse", "Zebra"], ["Chicken", "Duck"], ["Snake", "Lizard"], ["Butterfly", "Moth"], ["Spider", "Scorpion"], ["Rabbit", "Hare"], ["Penguin", "Ostrich"], ["Frog", "Toad"]],
+            nature: [["Sun", "Moon"], ["Mountain", "Hill"], ["Spring", "Autumn"], ["Thunder", "Lightning"], ["Cloud", "Fog"], ["Rain", "Snow"], ["Wind", "Breeze"], ["Star", "Planet"], ["Forest", "Jungle"], ["Desert", "Oasis"], ["River", "Lake"], ["Volcano", "Geyser"]],
+            tech: [["AI", "Robot"], ["Internet", "Intranet"], ["VR", "AR"], ["Programming", "Coding"], ["Drone", "Helicopter"], ["Email", "Letter"], ["Headphones", "Earphones"], ["Camera", "Video Camera"], ["Printer", "Scanner"], ["Tablet", "e-Reader"], ["Mouse", "Keyboard"], ["Battery", "Charger"]],
+            fantasy: [["Wizard", "Witch"], ["Dragon", "Wyvern"], ["Elf", "Dwarf"], ["Hero", "Demon Lord"], ["Ghost", "Zombie"], ["Angel", "Demon"], ["Unicorn", "Pegasus"], ["Vampire", "Werewolf"], ["Mermaid", "Siren"], ["Fairy", "Goblin"], ["Phoenix", "Griffin"], ["Potion", "Spell"]],
+            games: [["Mario", "Luigi"], ["Final Fantasy", "Dragon Quest"], ["Puzzle", "Quiz"], ["Board Game", "Card Game"], ["Pokémon", "Digimon"], ["Minecraft", "Roblox"], ["Chess", "Shogi"], ["Tag", "Hide-and-seek"], ["Poker", "Blackjack"], ["Billiards", "Darts"], ["Monopoly", "Scrabble"], ["Tetris", "Pac-Man"]],
+            history: [["Rome", "Greece"], ["Knight", "Samurai"], ["Pyramid", "Sphinx"], ["World War I", "World War II"], ["Renaissance", "Industrial Revolution"], ["Castle", "Fortress"], ["Viking", "Pirate"], ["Dinosaur", "Mammoth"], ["King", "Emperor"], ["Revolution", "Rebellion"], ["Napoleon", "Caesar"], ["Cleopatra", "Joan of Arc"]],
+            jobs: [["Doctor", "Nurse"], ["Police Officer", "Firefighter"], ["Baker", "Pâtissier"], ["Pilot", "Cabin Attendant"], ["Lawyer", "Prosecutor"], ["Writer", "Journalist"], ["Designer", "Architect"], ["Farmer", "Fisherman"], ["Singer", "Dancer"], ["Engineer", "Mechanic"], ["Photographer", "Videographer"], ["Librarian", "Curator"]],
+            colors: [["Red", "Pink"], ["Black", "Navy"], ["Gold", "Silver"], ["Orange", "Brown"], ["Green", "Lime"], ["Blue", "Sky Blue"], ["Purple", "Lavender"], ["White", "Ivory"], ["Gray", "Charcoal"], ["Beige", "Cream"], ["Turquoise", "Teal"], ["Magenta", "Fuchsia"]],
+            uk: [["Big Ben", "Tower of London"], ["Buckingham Palace", "Windsor Castle"], ["Football", "Rugby"], ["Fish and Chips", "Shepherd's Pie"], ["The Beatles", "The Rolling Stones"], ["Sherlock Holmes", "James Bond"], ["Tea", "Afternoon Tea"], ["England", "Scotland"], ["House of Commons", "House of Lords"], ["Harry Potter", "The Lord of the Rings"], ["Queen", "Oasis"], ["Wimbledon", "The Open Championship"], ["Stonehenge", "Hadrian's Wall"], ["The British Museum", "The National Gallery"], ["Tower Bridge", "London Bridge"], ["Edinburgh Castle", "Cardiff Castle"], ["London", "Manchester"], ["Scone", "Crumpet"], ["Gin", "Whisky"], ["Prince", "Princess"], ["Double-decker bus", "Black cab"], ["King Arthur", "Robin Hood"], ["Thames River", "River Severn"], ["London Eye", "The Shard"], ["Cheddar cheese", "Stilton cheese"], ["Red telephone box", "Red post box"], ["Shakespeare", "Charles Dickens"], ["Oxford University", "Cambridge University"], ["Paddington Bear", "Winnie-the-Pooh"], ["Jaffa Cakes", "Digestive Biscuits"], ["Union Jack", "Flag of England"]]
+        };
+        const TOPICS_JA = {
+            food: [["カレー", "シチュー"], ["うどん", "そば"], ["ビール", "発泡酒"], ["りんご", "なし"], ["マカロン", "トゥンカロン"], ["寿司", "刺身"], ["コーヒー", "紅茶"], ["ステーキ", "ハンバーグ"], ["パスタ", "ピザ"], ["パンケーキ", "ワッフル"], ["チョコレート", "キャラメル"], ["チーズ", "バター"]],
+            places: [["東京タワー", "スカイツリー"], ["ディズニーランド", "ディズニーシー"], ["金閣寺", "銀閣寺"], ["海", "川"], ["コンビニ", "スーパー"], ["山", "火山"], ["学校", "病院"], ["博物館", "美術館"], ["空港", "駅"], ["公園", "庭園"], ["図書館", "本屋"], ["カフェ", "レストラン"]],
+            people: [["俳優", "声優"], ["サンタクロース", "トナカイ"], ["先生", "生徒"], ["王様", "大統領"], ["科学者", "発明家"], ["芸術家", "音楽家"], ["シェフ", "パティシエ"], ["スポーツ選手", "コーチ"], ["探偵", "警察官"], ["YouTuber", "配信者"], ["パイロット", "宇宙飛行士"], ["農家", "庭師"]],
+            actions: [["ランニング", "ジョギング"], ["料理", "食事"], ["睡眠", "昼寝"], ["勉強", "仕事"], ["拍手", "手拍子"], ["歌", "ダンス"], ["読書", "執筆"], ["描画", "絵画"], ["笑う", "泣く"], ["歩く", "ハイキング"], ["押す", "引く"], ["投げる", "キャッチする"]],
+            things: [["スマホ", "携帯電話"], ["シャンプー", "リンス"], ["パソコン", "ノートパソコン"], ["鉛筆", "シャーペン"], ["傘", "日傘"], ["椅子", "ソファ"], ["本", "雑誌"], ["鍵", "錠"], ["腕時計", "時計"], ["メガネ", "サングラス"], ["スプーン", "フォーク"], ["タオル", "毛布"]],
+            sports: [["サッカー", "フットサル"], ["野球", "ソフトボール"], ["テニス", "バドミントン"], ["卓球", "ピンポン"], ["水泳", "飛び込み"], ["スキー", "スノーボード"], ["バスケットボール", "バレーボール"], ["柔道", "空手"], ["ゴルフ", "ボウリング"], ["ボクシング", "レスリング"], ["スケートボード", "サーフィン"], ["アーチェリー", "ダーツ"]],
+            entertainment: [["映画", "ドラマ"], ["漫画", "アニメ"], ["演劇", "ミュージカル"], ["YouTube", "TikTok"], ["コンサート", "フェス"], ["喜劇", "悲劇"], ["ラジオ", "ポッドキャスト"], ["サーカス", "マジックショー"], ["バレエ", "オペラ"], ["テレビゲーム", "アーケードゲーム"], ["小説", "詩"], ["彫刻", "絵画"]],
+            animals: [["犬", "猫"], ["ライオン", "トラ"], ["イルカ", "クジラ"], ["ハムスター", "モルモット"], ["馬", "シマウマ"], ["ニワトリ", "アヒル"], ["ヘビ", "トカゲ"], ["蝶", "蛾"], ["クモ", "サソリ"], ["うさぎ", "野うさぎ"], ["ペンギン", "ダチョウ"], ["カエル", "ヒキガエル"]],
+            nature: [["太陽", "月"], ["山", "丘"], ["春", "秋"], ["雷", "稲妻"], ["雲", "霧"], ["雨", "雪"], ["風", "そよ風"], ["星", "惑星"], ["森", "ジャングル"], ["砂漠", "オアシス"], ["川", "湖"], ["火山", "間欠泉"]],
+            tech: [["AI", "ロボット"], ["インターネット", "イントラネット"], ["VR", "AR"], ["プログラミング", "コーディング"], ["ドローン", "ヘリコプター"], ["Eメール", "手紙"], ["ヘッドホン", "イヤホン"], ["カメラ", "ビデオカメラ"], ["プリンター", "スキャナー"], ["タブレット", "電子書籍リーダー"], ["マウス", "キーボード"], ["バッテリー", "充電器"]],
+            fantasy: [["魔法使い", "魔女"], ["ドラゴン", "ワイバーン"], ["エルフ", "ドワーフ"], ["勇者", "魔王"], ["幽霊", "ゾンビ"], ["天使", "悪魔"], ["ユニコーン", "ペガサス"], ["吸血鬼", "狼男"], ["人魚", "セイレーン"], ["妖精", "ゴブリン"], ["フェニックス", "グリフィン"], ["ポーション", "呪文"]],
+            games: [["マリオ", "ルイージ"], ["ファイナルファンタジー", "ドラゴンクエスト"], ["パズル", "クイズ"], ["ボードゲーム", "カードゲーム"], ["ポケモン", "デジモン"], ["マインクラフト", "ロブロックス"], ["チェス", "将棋"], ["鬼ごっこ", "かくれんぼ"], ["ポーカー", "ブラックジャック"], ["ビリヤード", "ダーツ"], ["モノポリー", "スクラブル"], ["テトリス", "パックマン"]],
+            history: [["ローマ", "ギリシャ"], ["騎士", "侍"], ["ピラミッド", "スフィンクス"], ["第一次世界大戦", "第二次世界大戦"], ["ルネサンス", "産業革命"], ["城", "要塞"], ["バイキング", "海賊"], ["恐竜", "マンモス"], ["王", "皇帝"], ["革命", "反乱"], ["ナポレオン", "カエサル"], ["クレオパトラ", "ジャンヌ・ダルク"]],
+            jobs: [["医者", "看護師"], ["警察官", "消防士"], ["パン屋", "パティシエ"], ["パイロット", "客室乗務員"], ["弁護士", "検察官"], ["作家", "ジャーナリスト"], ["デザイナー", "建築家"], ["農家", "漁師"], ["歌手", "ダンサー"], ["エンジニア", "整備士"], ["写真家", "ビデオグラファー"], ["司書", "学芸員"]],
+            colors: [["赤", "ピンク"], ["黒", "紺"], ["金", "銀"], ["オレンジ", "茶色"], ["緑", "黄緑"], ["青", "水色"], ["紫", "ラベンダー"], ["白", "アイボリー"], ["灰色", "チャコール"], ["ベージュ", "クリーム色"], ["ターコイズ", "ティール"], ["マゼンタ", "フューシャ"]],
+            uk: [["ビッグ・ベン", "ロンドン塔"], ["バッキンガム宮殿", "ウィンザー城"], ["サッカー", "ラグビー"], ["フィッシュ・アンド・チップス", "シェパーズパイ"], ["ビートルズ", "ローリング・ストーンズ"], ["シャーロック・ホームズ", "ジェームズ・ボンド"], ["紅茶", "アフタヌーンティー"], ["イングランド", "スコットランド"], ["庶民院", "貴族院"], ["ハリー・ポッター", "指輪物語"], ["クイーン", "オアシス"], ["ウィンブルドン", "全英オープン"], ["ストーンヘンジ", "ハドリアヌスの長城"], ["大英博物館", "ナショナル・ギャラリー"], ["タワーブリッジ", "ロンドン橋"], ["エディンバラ城", "カーディフ城"], ["ロンドン", "マンチェスター"], ["スコーン", "クランペット"], ["ジン", "ウィスキー"], ["王子", "王女"], ["二階建てバス", "ブラックキャブ"], ["アーサー王", "ロビン・フッド"], ["テムズ川", "セヴァーン川"], ["ロンドン・アイ", "ザ・シャード"], ["チェダーチーズ", "スティルトンチーズ"], ["赤い電話ボックス", "赤い郵便ポスト"], ["シェイクスピア", "チャールズ・ディケンズ"], ["オックスフォード大学", "ケンブリッジ大学"], ["パディントン", "くまのプーさん"], ["ジャファケーキ", "ダイジェスティブビスケット"], ["ユニオンジャック", "イングランドの旗"]]
+        };
+        const TOPIC_NAMES_EN = { food: "Food & Drink", places: "Places", people: "People", actions: "Actions", things: "Things", sports: "Sports", entertainment: "Entertainment", animals: "Animals", nature: "Nature", tech: "Technology", fantasy: "Fantasy", games: "Games", history: "History", jobs: "Jobs", colors: "Colors", uk: "About the UK" };
+        const TOPIC_NAMES_JA = { food: "食べ物・飲み物", places: "場所", people: "人物", actions: "行動", things: "モノ", sports: "スポーツ", entertainment: "エンタメ", animals: "動物", nature: "自然", tech: "テクノロジー", fantasy: "ファンタジー", games: "ゲーム", history: "歴史", jobs: "職業", colors: "色", uk: "イギリス関連" };
 
-        // --- All Game Screens (Templates) ---
+        function render(html) { appContainer.innerHTML = html; }
+
+        // --- UI TEMPLATES ---
 
         function getHomeScreenHTML() {
             return `
@@ -120,16 +152,53 @@
                                 <button id="join-room-btn" class="btn btn-secondary">Join</button>
                             </div>
                         </div>
+                        <button id="show-rules-btn" class="text-violet-400 mt-8">How to Play & Credits</button>
+                    </div>
+                </div>
+            `;
+        }
+
+        function getRulesAndCreditsHTML() {
+             return `
+                <div class="screen">
+                    <div class="card">
+                        <div class="text-center mb-6"><h1 class="text-3xl font-bold">Word Wolf</h1></div>
+                        <div class="space-y-6">
+                            <div>
+                                <h2 class="text-xl font-bold mb-2 text-violet-400">What is Word Wolf?</h2>
+                                <p class="text-gray-300">It's a game to find the "wolf" who has been given a different word from everyone else (the "citizens"). Use discussion to find the person who doesn't quite fit in!</p>
+                            </div>
+                            <div>
+                                <h2 class="text-xl font-bold mb-2 text-violet-400">Game Flow</h2>
+                                <ol class="list-decimal rules-list space-y-2 text-gray-300">
+                                    <li><b>Setup:</b> The host sets the game rules in the waiting room.</li>
+                                    <li><b>Check Word:</b> Secretly check your assigned word and role.</li>
+                                    <li><b>Talk Time:</b> Discuss the topic to find the wolf.</li>
+                                    <li><b>Vote:</b> Vote for who you think is the Wolf.</li>
+                                    <li><b>Result:</b> See who was eliminated and if the game ends!</li>
+                                </ol>
+                            </div>
+                            <div>
+                                <h2 class="text-xl font-bold mb-2 text-violet-400">Credits</h2>
+                                <div class="text-gray-400 text-sm text-center space-y-1">
+                                    <p>Game Director: Kei</p>
+                                    <p>Development: KY</p>
+                                    <p>Development Support: Gemini</p>
+                                </div>
+                            </div>
+                            <button id="back-to-home-btn" class="btn btn-primary w-full mt-4">Back</button>
+                        </div>
                     </div>
                 </div>
             `;
         }
 
         function getWaitingRoomHTML(room) {
-            const me = room.players[localState.userId];
-            const isHost = me && me.isHost;
+            const isHost = room.hostId === localState.userId;
             const playersHTML = Object.values(room.players).map(p => `<span class="p-2 rounded-full bg-gray-700">${p.name} ${p.isHost ? '👑' : ''}</span>`).join('');
-            
+            const topicNames = room.settings.language === 'ja' ? TOPIC_NAMES_JA : TOPIC_NAMES_EN;
+            const topicOptionsHTML = Object.keys(topicNames).map(key => `<option value="${key}" ${room.settings.topic === key ? 'selected' : ''}>${topicNames[key]}</option>`).join('');
+
             return `
                 <div class="screen">
                     <div class="card text-center">
@@ -139,40 +208,453 @@
                         <h2 class="text-xl font-bold mt-6 mb-3">Players (${Object.keys(room.players).length})</h2>
                         <div class="flex flex-wrap justify-center gap-2 mb-6">${playersHTML}</div>
                         ${isHost ? `
+                            <div class="text-left space-y-4 mt-4 border-t border-gray-700 pt-4">
+                                <div>
+                                    <label for="language" class="font-medium">Language</label>
+                                    <select id="language" class="form-select">
+                                        <option value="en" ${room.settings.language === 'en' ? 'selected' : ''}>English</option>
+                                        <option value="ja" ${room.settings.language === 'ja' ? 'selected' : ''}>日本語</option>
+                                    </select>
+                                </div>
+                                <div>
+                                    <label for="wolf-count" class="font-medium">Wolf Count</label>
+                                    <input id="wolf-count" type="number" class="form-input" value="${room.settings.wolfCount}" min="1">
+                                </div>
+                                <div>
+                                    <label for="topic" class="font-medium">Topic</label>
+                                    <select id="topic" class="form-select">
+                                        ${topicOptionsHTML}
+                                        <option value="custom" ${room.settings.topic === 'custom' ? 'selected' : ''}>Custom</option>
+                                    </select>
+                                </div>
+                                <div id="custom-topic-area" class="${room.settings.topic === 'custom' ? '' : 'hidden'} space-y-2">
+                                    <input id="citizen-word" type="text" class="form-input" placeholder="Citizen Word">
+                                    <input id="wolf-word" type="text" class="form-input" placeholder="Wolf Word">
+                                </div>
+                            </div>
                             <button id="start-game-btn" class="btn btn-primary w-full mt-6">Start Game</button>
                         ` : '<p class="text-gray-400 mt-6">Waiting for the host to start the game...</p>'}
                     </div>
                 </div>
             `;
         }
-        
-        // --- Firebase Logic ---
 
+        function getRoleAssignmentHTML(room) {
+            const me = room.players[localState.userId];
+            return `
+                <div class="screen">
+                    <div class="card text-center">
+                        <p class="text-gray-400">Your Role</p>
+                        <p class="text-3xl font-bold ${me.role === 'wolf' ? 'text-red-500' : 'text-blue-500'}">${me.role}</p>
+                        <p class="text-gray-400 mt-6">Your Word</p>
+                        <p class="text-4xl font-bold text-violet-400 my-4">${me.word}</p>
+                        <button id="ack-word-btn" class="btn btn-primary w-full">I Understand</button>
+                    </div>
+                </div>
+            `;
+        }
+        
+        function getTalkTimeHTML(room) {
+            const playersHTML = Object.values(room.players).map(p => {
+                const isEliminated = p.isEliminated ? 'line-through opacity-50' : '';
+                return `<span class="p-2 rounded-full bg-gray-700 ${isEliminated}">${p.name}</span>`;
+            }).join('');
+            return `
+                <div class="screen">
+                    <div class="card text-center w-full max-w-2xl">
+                        <p class="text-2xl font-bold mb-4">Talk Time</p>
+                        <div id="timer-display" class="timer text-violet-400 mb-6">03:00</div>
+                        <p class="font-medium mb-2">Participants</p>
+                        <div class="flex flex-wrap justify-center gap-2">${playersHTML}</div>
+                    </div>
+                </div>
+            `;
+        }
+
+        function getVotingHTML(room) {
+            const me = room.players[localState.userId];
+            if (me.isEliminated || me.hasVoted) {
+                return `
+                    <div class="screen">
+                        <div class="card text-center"><p class="text-xl">Waiting for others to vote...</p></div>
+                    </div>`;
+            }
+            const voteButtonsHTML = Object.values(room.players)
+                .filter(p => !p.isEliminated)
+                .map(p => `<button class="btn btn-secondary w-full" data-vote-id="${p.id}" ${p.id === localState.userId ? 'disabled' : ''}>${p.name}</button>`)
+                .join('');
+            return `
+                <div class="screen">
+                    <div class="card text-center">
+                        <h2 class="text-3xl font-bold mb-4">Vote Time</h2>
+                        <p class="text-gray-400 mb-6">Who do you think is the Wolf?</p>
+                        <div class="grid grid-cols-2 sm:grid-cols-3 gap-3">${voteButtonsHTML}</div>
+                    </div>
+                </div>
+            `;
+        }
+
+        function getResultsHTML(room) {
+            const eliminatedPlayer = Object.values(room.players).find(p => p.id === room.lastEliminatedId);
+            let resultText = "The vote was a tie. No one was eliminated.";
+            let roleRevealHTML = '';
+            if (eliminatedPlayer) {
+                resultText = `${eliminatedPlayer.name} has been voted out.`;
+                const roleColor = eliminatedPlayer.role === 'wolf' ? 'text-red-500' : 'text-blue-500';
+                roleRevealHTML = `<p class="text-xl">${eliminatedPlayer.name} was a <span class="font-bold ${roleColor}">${eliminatedPlayer.role}</span>.</p>`;
+            }
+            const isHost = room.hostId === localState.userId;
+            return `
+                <div class="screen">
+                    <div class="card text-center">
+                        <h2 class="text-3xl font-bold mb-4">Vote Results</h2>
+                        <p class="text-xl mb-6">${resultText}</p>
+                        ${roleRevealHTML}
+                        ${isHost ? '<button id="next-round-btn" class="btn btn-primary w-full mt-6">Continue</button>' : '<p class="text-gray-400 mt-6">Waiting for the host to continue...</p>'}
+                    </div>
+                </div>
+            `;
+        }
+        
+        function getEndGameHTML(room) {
+            return `
+                <div class="screen">
+                    <div class="card text-center">
+                        <h2 class="text-4xl font-bold ${room.winner === 'citizens' ? 'text-blue-500' : 'text-red-500'}">${room.winner.charAt(0).toUpperCase() + room.winner.slice(1)} Win!</h2>
+                        <p class="my-6">The words were:</p>
+                        <div class="text-lg bg-gray-900 p-4 rounded-lg">
+                            <p>Citizen: <span class="font-bold">${room.words.citizen}</span></p>
+                            <p>Wolf: <span class="font-bold">${room.words.wolf}</span></p>
+                        </div>
+                        ${room.hostId === localState.userId ? '<button id="play-again-btn" class="btn btn-primary w-full mt-6">Play Again</button>' : '<p class="text-gray-400 mt-6">Waiting for the host...</p>'}
+                    </div>
+                </div>
+            `;
+        }
+        
+        // --- Game Logic ---
+        
+        async function startGame(room) {
+            const roomRef = doc(db, "rooms", room.id);
+            const players = room.players;
+            const settings = room.settings;
+            const playerIds = Object.keys(players);
+            const wolfCount = Math.max(1, Math.min(settings.wolfCount, playerIds.length - 1));
+
+            if (playerIds.length < 3) {
+                alert("You need at least 3 players to start.");
+                return;
+            }
+
+            let roles = Array(playerIds.length).fill('citizen');
+            for(let i = 0; i < wolfCount; i++) roles[i] = 'wolf';
+            roles.sort(() => Math.random() - 0.5);
+
+            let wordPair;
+            if (settings.topic === 'custom') {
+                const citizenWord = document.getElementById('citizen-word').value.trim();
+                const wolfWord = document.getElementById('wolf-word').value.trim();
+                if (!citizenWord || !wolfWord) {
+                    alert("Please enter both custom words.");
+                    return;
+                }
+                wordPair = [citizenWord, wolfWord];
+            } else {
+                const topicData = settings.language === 'ja' ? TOPICS_JA : TOPICS_EN;
+                wordPair = topicData[settings.topic][Math.floor(Math.random() * topicData[settings.topic].length)];
+            }
+            
+            const [wordA, wordB] = wordPair.sort(() => Math.random() - 0.5);
+            
+            const updatedPlayers = { ...players };
+            playerIds.forEach((id, index) => {
+                updatedPlayers[id].role = roles[index];
+                updatedPlayers[id].word = roles[index] === 'wolf' ? wordB : wordA;
+            });
+
+            await updateDoc(roomRef, {
+                gameState: 'role_assignment',
+                players: updatedPlayers,
+                words: { citizen: wordA, wolf: wordB }
+            });
+        }
+
+        function handleTimer(room) {
+            if (localState.timerInterval) clearInterval(localState.timerInterval);
+            const timerDisplay = document.getElementById('timer-display');
+            if (!timerDisplay) return;
+
+            localState.timerInterval = setInterval(async () => {
+                const serverTime = room.phaseEndTime.toMillis();
+                const remaining = Math.max(0, Math.round((serverTime - Date.now()) / 1000));
+                const minutes = String(Math.floor(remaining / 60)).padStart(2, '0');
+                const seconds = String(remaining % 60).padStart(2, '0');
+                timerDisplay.textContent = `${minutes}:${seconds}`;
+
+                if (remaining <= 0 && localState.isHost) {
+                    clearInterval(localState.timerInterval);
+                    const roomRef = doc(db, "rooms", room.id);
+                    await updateDoc(roomRef, { gameState: 'voting' });
+                }
+            }, 500);
+        }
+
+        // --- Main Listener ---
+        
+        function attachRoomListener(roomId) {
+            if (localState.roomUnsubscribe) localState.roomUnsubscribe();
+            localState.roomUnsubscribe = onSnapshot(doc(db, "rooms", roomId), (doc) => {
+                const roomData = doc.data();
+                if (!roomData) {
+                    if(localState.roomUnsubscribe) localState.roomUnsubscribe();
+                    alert("The host has closed the room.");
+                    window.location.href = '/';
+                    return;
+                }
+                
+                localState.isHost = roomData.hostId === localState.userId;
+                if(localState.timerInterval && roomData.gameState !== 'talk_time') {
+                    clearInterval(localState.timerInterval);
+                }
+
+                switch (roomData.gameState) {
+                    case 'waiting':
+                        render(getWaitingRoomHTML(roomData));
+                        addWaitingRoomListeners(roomData);
+                        break;
+                    case 'role_assignment':
+                        const me = roomData.players[localState.userId];
+                        if (me.acknowledged) {
+                            render(`<div class="screen"><div class="card text-center"><p class="text-xl">Waiting for others to confirm...</p></div></div>`);
+                        } else {
+                            render(getRoleAssignmentHTML(roomData));
+                            addRoleAssignmentListeners(roomData);
+                        }
+                        break;
+                    case 'talk_time':
+                        render(getTalkTimeHTML(roomData));
+                        handleTimer(roomData);
+                        break;
+                    case 'voting':
+                        render(getVotingHTML(roomData));
+                        addVotingListeners(roomData);
+                        break;
+                    case 'results':
+                        render(getResultsHTML(roomData));
+                        addResultsListeners(roomData);
+                        break;
+                    case 'end_game':
+                        render(getEndGameHTML(roomData));
+                        addEndGameListeners(roomData);
+                        break;
+                }
+            });
+        }
+        
+        // --- Event Listeners ---
+        function addHomeListeners() {
+            document.getElementById('create-room-btn').addEventListener('click', createRoom);
+            document.getElementById('join-room-btn').addEventListener('click', () => joinRoom(null));
+            document.getElementById('show-rules-btn').addEventListener('click', () => {
+                render(getRulesAndCreditsHTML());
+                document.getElementById('back-to-home-btn').addEventListener('click', () => {
+                    render(getHomeScreenHTML());
+                    addHomeListeners();
+                });
+            });
+        }
+
+        function addWaitingRoomListeners(room) {
+            if (localState.isHost) {
+                document.getElementById('start-game-btn').addEventListener('click', () => startGame(room));
+                
+                const updateSettings = async () => {
+                    const roomRef = doc(db, "rooms", room.id);
+                    await updateDoc(roomRef, {
+                        "settings.wolfCount": parseInt(document.getElementById('wolf-count').value) || 1,
+                        "settings.topic": document.getElementById('topic').value,
+                        "settings.language": document.getElementById('language').value,
+                    });
+                };
+                
+                document.getElementById('language').addEventListener('change', updateSettings);
+                document.getElementById('wolf-count').addEventListener('change', updateSettings);
+                document.getElementById('topic').addEventListener('change', () => {
+                    document.getElementById('custom-topic-area').classList.toggle('hidden', document.getElementById('topic').value !== 'custom');
+                    updateSettings();
+                });
+            }
+            document.getElementById('room-id-display').addEventListener('click', (e) => {
+                navigator.clipboard.writeText(room.id);
+                document.getElementById('copy-feedback').textContent = 'Copied!';
+                setTimeout(() => { 
+                    if(document.getElementById('copy-feedback')) document.getElementById('copy-feedback').textContent = '' 
+                }, 2000);
+            });
+        }
+        
+        function addRoleAssignmentListeners(room) {
+            document.getElementById('ack-word-btn').addEventListener('click', async () => {
+                const roomRef = doc(db, "rooms", room.id);
+                await updateDoc(roomRef, { [`players.${localState.userId}.acknowledged`]: true });
+
+                const updatedRoomSnap = await getDoc(roomRef);
+                const updatedRoom = updatedRoomSnap.data();
+
+                const allAckd = Object.values(updatedRoom.players).every(p => p.acknowledged);
+                if (allAckd && localState.isHost) {
+                    const talkTimeInSeconds = 180;
+                    const phaseEndTime = new Date(Date.now() + talkTimeInSeconds * 1000);
+                    await updateDoc(roomRef, { 
+                        gameState: 'talk_time',
+                        phaseEndTime: phaseEndTime
+                    });
+                }
+            });
+        }
+
+        function addVotingListeners(room) {
+            document.querySelectorAll('[data-vote-id]').forEach(button => {
+                button.addEventListener('click', async (e) => {
+                    const votedId = e.currentTarget.dataset.voteId;
+                    const roomRef = doc(db, "rooms", room.id);
+                    
+                    const currentVotes = room.players[votedId].votes || 0;
+                    
+                    await updateDoc(roomRef, {
+                        [`players.${localState.userId}.hasVoted`]: true,
+                        [`players.${votedId}.votes`]: currentVotes + 1
+                    });
+
+                    const updatedRoomSnap = await getDoc(roomRef);
+                    const updatedRoom = updatedRoomSnap.data();
+
+                    const allVoted = Object.values(updatedRoom.players).filter(p => !p.isEliminated).every(p => p.hasVoted);
+                    if (allVoted && localState.isHost) {
+                        let maxVotes = -1;
+                        let mostVotedIds = [];
+                        Object.values(updatedRoom.players).forEach(p => {
+                            const pVotes = p.votes || 0;
+                            if (pVotes > maxVotes) {
+                                maxVotes = pVotes;
+                                mostVotedIds = [p.id];
+                            } else if (pVotes === maxVotes) {
+                                mostVotedIds.push(p.id);
+                            }
+                        });
+                        
+                        let lastEliminatedId = null;
+                        if (mostVotedIds.length === 1 && maxVotes > 0) {
+                            lastEliminatedId = mostVotedIds[0];
+                        }
+
+                        const updatePayload = { gameState: 'results', lastEliminatedId };
+                        if(lastEliminatedId) {
+                            updatePayload[`players.${lastEliminatedId}.isEliminated`] = true;
+                        }
+                        
+                        Object.keys(updatedRoom.players).forEach(id => {
+                            updatePayload[`players.${id}.votes`] = 0;
+                            updatePayload[`players.${id}.hasVoted`] = false;
+                        });
+
+                        await updateDoc(roomRef, updatePayload);
+                    }
+                });
+            });
+        }
+
+        function addResultsListeners(room) {
+            if (!localState.isHost) return;
+            document.getElementById('next-round-btn').addEventListener('click', async () => {
+                const roomRef = doc(db, "rooms", room.id);
+                
+                const remainingPlayers = Object.values(room.players).filter(p => !p.isEliminated);
+                const remainingWolves = remainingPlayers.filter(p => p.role === 'wolf').length;
+                const remainingCitizens = remainingPlayers.length - remainingWolves;
+
+                if (remainingWolves === 0) {
+                    await updateDoc(roomRef, { gameState: 'end_game', winner: 'citizens' });
+                } else if (remainingWolves >= remainingCitizens) {
+                    await updateDoc(roomRef, { gameState: 'end_game', winner: 'wolves' });
+                } else {
+                    const talkTimeInSeconds = 180;
+                    const phaseEndTime = new Date(Date.now() + talkTimeInSeconds * 1000);
+                    await updateDoc(roomRef, { 
+                        gameState: 'talk_time',
+                        phaseEndTime: phaseEndTime,
+                        lastEliminatedId: null
+                    });
+                }
+            });
+        }
+
+        function addEndGameListeners(room) {
+            if (!localState.isHost) return;
+            document.getElementById('play-again-btn').addEventListener('click', async () => {
+                const roomRef = doc(db, "rooms", room.id);
+                const playersReset = { ...room.players };
+                Object.keys(playersReset).forEach(id => {
+                    delete playersReset[id].role;
+                    delete playersReset[id].word;
+                    delete playersReset[id].acknowledged;
+                    delete playersReset[id].isEliminated;
+                    delete playersReset[id].hasVoted;
+                    delete playersReset[id].votes;
+                });
+                await updateDoc(roomRef, {
+                    gameState: 'waiting',
+                    players: playersReset,
+                    lastEliminatedId: null,
+                    winner: null,
+                    words: null,
+                });
+            });
+        }
+
+        // --- Initial Load ---
+        onAuthStateChanged(auth, (user) => {
+            if (user) {
+                localState.userId = user.uid;
+                const pathRoomId = window.location.pathname.split('/room/')[1];
+                if(pathRoomId) {
+                    joinRoom(pathRoomId.toUpperCase());
+                } else {
+                    render(getHomeScreenHTML());
+                    addHomeListeners();
+                }
+            } else {
+                signInAnonymously(auth);
+            }
+        });
+
+        // --- Helper Functions ---
         async function createRoom() {
             if (!validatePlayerName()) return;
             localState.isHost = true;
             const roomId = Math.random().toString(36).substring(2, 8).toUpperCase();
+            window.history.pushState({}, '', `/room/${roomId}`);
             const roomRef = doc(db, "rooms", roomId);
-
             const newPlayer = {
-                [localState.userId]: {
-                    name: localState.playerName,
-                    isHost: true,
-                }
+                [localState.userId]: { name: localState.playerName, isHost: true }
             };
-
             await setDoc(roomRef, {
                 id: roomId,
                 hostId: localState.userId,
                 gameState: 'waiting',
                 players: newPlayer,
+                settings: { wolfCount: 1, topic: 'food', language: 'en' }
             });
-            
-            joinRoom(roomId);
+            attachRoomListener(roomId);
         }
 
         async function joinRoom(roomId) {
-            if (!roomId || !validatePlayerName()) return;
+            if (!roomId) {
+                const joinId = document.getElementById('join-room-id-input').value.trim().toUpperCase();
+                 if(!joinId) { alert('Please enter a Room ID.'); return; }
+                 roomId = joinId;
+            }
+            if (!validatePlayerName()) return;
             
             const roomRef = doc(db, "rooms", roomId);
             const roomSnap = await getDoc(roomRef);
@@ -181,35 +663,17 @@
                 alert("Room not found!");
                 return;
             }
+            
+            window.history.pushState({}, '', `/room/${roomId}`);
+            const newPlayerData = { name: localState.playerName, isHost: roomSnap.data().hostId === localState.userId };
+            await updateDoc(roomRef, { [`players.${localState.userId}`]: newPlayerData });
 
-            const newPlayerData = {
-                name: localState.playerName,
-                isHost: roomSnap.data().hostId === localState.userId,
-            };
-            await updateDoc(roomRef, {
-                [`players.${localState.userId}`]: newPlayerData
-            });
-
-            if (localState.roomUnsubscribe) localState.roomUnsubscribe();
-            localState.roomUnsubscribe = onSnapshot(roomRef, (doc) => {
-                const roomData = doc.data();
-                if (roomData) {
-                    if (roomData.gameState === 'waiting') {
-                        render(getWaitingRoomHTML(roomData));
-                        addWaitingRoomListeners(roomData);
-                    }
-                    // Add other game states here
-                } else {
-                    alert("The room has been closed.");
-                    if(localState.roomUnsubscribe) localState.roomUnsubscribe();
-                    render(getHomeScreenHTML());
-                    addHomeListeners();
-                }
-            });
+            attachRoomListener(roomId);
         }
 
         function validatePlayerName() {
             const nameInput = document.getElementById('player-name-input');
+            if(!nameInput) return false;
             const playerName = nameInput.value.trim();
             if (!playerName) {
                 alert('Please enter your name.');
@@ -220,41 +684,55 @@
             return true;
         }
 
-        // --- Event Listeners ---
-        
-        function addHomeListeners() {
-            document.getElementById('create-room-btn').addEventListener('click', createRoom);
-            document.getElementById('join-room-btn').addEventListener('click', () => {
-                const roomId = document.getElementById('join-room-id-input').value.trim().toUpperCase();
-                joinRoom(roomId);
+        function attachRoomListener(roomId) {
+            if (localState.roomUnsubscribe) localState.roomUnsubscribe();
+            localState.roomUnsubscribe = onSnapshot(doc(db, "rooms", roomId), (doc) => {
+                const roomData = doc.data();
+                if (!roomData) {
+                    if(localState.roomUnsubscribe) localState.roomUnsubscribe();
+                    alert("The host has closed the room.");
+                    window.location.href = '/';
+                    return;
+                }
+                
+                localState.isHost = roomData.hostId === localState.userId;
+                if(localState.timerInterval && roomData.gameState !== 'talk_time') {
+                    clearInterval(localState.timerInterval);
+                }
+
+                switch (roomData.gameState) {
+                    case 'waiting':
+                        render(getWaitingRoomHTML(roomData));
+                        addWaitingRoomListeners(roomData);
+                        break;
+                    case 'role_assignment':
+                        const me = roomData.players[localState.userId];
+                        if (me.acknowledged) {
+                            render(`<div class="screen"><div class="card text-center"><p class="text-xl">Waiting for others to confirm...</p></div></div>`);
+                        } else {
+                            render(getRoleAssignmentHTML(roomData));
+                            addRoleAssignmentListeners(roomData);
+                        }
+                        break;
+                    case 'talk_time':
+                        render(getTalkTimeHTML(roomData));
+                        handleTimer(roomData);
+                        break;
+                    case 'voting':
+                        render(getVotingHTML(roomData));
+                        addVotingListeners(roomData);
+                        break;
+                    case 'results':
+                        render(getResultsHTML(roomData));
+                        addResultsListeners(roomData);
+                        break;
+                    case 'end_game':
+                        render(getEndGameHTML(roomData));
+                        addEndGameListeners(roomData);
+                        break;
+                }
             });
         }
-
-        function addWaitingRoomListeners(room) {
-            if (room.hostId === localState.userId) {
-                document.getElementById('start-game-btn').addEventListener('click', async () => {
-                    const roomRef = doc(db, "rooms", room.id);
-                    await updateDoc(roomRef, { gameState: 'role_assignment' });
-                });
-            }
-            document.getElementById('room-id-display').addEventListener('click', (e) => {
-                navigator.clipboard.writeText(room.id);
-                const feedback = document.getElementById('copy-feedback');
-                feedback.textContent = 'Copied!';
-                setTimeout(() => feedback.textContent = '', 2000);
-            });
-        }
-
-        // --- Initial Load ---
-        onAuthStateChanged(auth, (user) => {
-            if (user) {
-                localState.userId = user.uid;
-                render(getHomeScreenHTML());
-                addHomeListeners();
-            } else {
-                signInAnonymously(auth);
-            }
-        });
     </script>
 </body>
 </html>
