@@ -400,19 +400,6 @@
                             addWaitingRoomListeners(roomData);
                             break;
                         case 'role_assignment':
-                            if (localState.isHost) {
-                                const allAckd = Object.values(roomData.players).every(p => p.acknowledged);
-                                if (allAckd) {
-                                    const talkTimeInSeconds = 180;
-                                    const phaseEndTime = new Date(Date.now() + talkTimeInSeconds * 1000);
-                                    const roomRef = doc(db, "rooms", roomData.id);
-                                    updateDoc(roomRef, { 
-                                        gameState: 'talk_time',
-                                        phaseEndTime: phaseEndTime
-                                    });
-                                    return; 
-                                }
-                            }
                             const me = roomData.players[localState.userId];
                             if (me.acknowledged) {
                                 render(`<div class="screen"><div class="card text-center"><p class="text-xl">Waiting for others to confirm...</p></div></div>`);
@@ -426,13 +413,6 @@
                             handleTimer(roomData);
                             break;
                         case 'voting':
-                             if (localState.isHost) {
-                                const allVoted = Object.values(roomData.players).filter(p => !p.isEliminated).every(p => p.hasVoted);
-                                if (allVoted) {
-                                    tallyVotesAndProceed(roomData);
-                                    return;
-                                }
-                            }
                             render(getVotingHTML(roomData));
                             addVotingListeners(roomData);
                             break;
@@ -492,23 +472,50 @@
                 });
             }
             
+            async function handleAcknowledgement(room) {
+                const roomRef = doc(db, "rooms", room.id);
+                await updateDoc(roomRef, { [`players.${localState.userId}.acknowledged`]: true });
+
+                const updatedRoomSnap = await getDoc(roomRef);
+                const updatedRoom = updatedRoomSnap.data();
+
+                const allAckd = Object.values(updatedRoom.players).every(p => p.acknowledged);
+                if (allAckd) {
+                    const talkTimeInSeconds = 180;
+                    const phaseEndTime = new Date(Date.now() + talkTimeInSeconds * 1000);
+                    await updateDoc(roomRef, { 
+                        gameState: 'talk_time',
+                        phaseEndTime: phaseEndTime
+                    });
+                }
+            }
+
             function addRoleAssignmentListeners(room) {
-                document.getElementById('ack-word-btn').addEventListener('click', async () => {
-                    const roomRef = doc(db, "rooms", room.id);
-                    await updateDoc(roomRef, { [`players.${localState.userId}.acknowledged`]: true });
+                document.getElementById('ack-word-btn').addEventListener('click', () => handleAcknowledgement(room));
+            }
+
+            async function handleVote(votedId, room) {
+                const roomRef = doc(db, "rooms", room.id);
+                const currentVotes = room.players[votedId].votes || 0;
+                await updateDoc(roomRef, {
+                    [`players.${localState.userId}.hasVoted`]: true,
+                    [`players.${votedId}.votes`]: currentVotes + 1
                 });
+
+                const updatedRoomSnap = await getDoc(roomRef);
+                const updatedRoom = updatedRoomSnap.data();
+
+                const allVoted = Object.values(updatedRoom.players).filter(p => !p.isEliminated).every(p => p.hasVoted);
+                if (allVoted) {
+                    tallyVotesAndProceed(updatedRoom);
+                }
             }
 
             function addVotingListeners(room) {
                 document.querySelectorAll('[data-vote-id]').forEach(button => {
-                    button.addEventListener('click', async (e) => {
+                    button.addEventListener('click', (e) => {
                         const votedId = e.currentTarget.dataset.voteId;
-                        const roomRef = doc(db, "rooms", room.id);
-                        const currentVotes = room.players[votedId].votes || 0;
-                        await updateDoc(roomRef, {
-                            [`players.${localState.userId}.hasVoted`]: true,
-                            [`players.${votedId}.votes`]: currentVotes + 1
-                        });
+                        handleVote(votedId, room);
                     });
                 });
             }
