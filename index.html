@@ -147,6 +147,7 @@
                                         <li><b>Check Word:</b> Secretly check your assigned word. You won't be told your role!</li>
                                         <li><b>Talk Time:</b> Discuss the topic to find the wolf.</li>
                                         <li><b>Question Time:</b> One by one, ask a question or skip your turn.</li>
+                                        <li><b>Final Talk Time:</b> One last chance to discuss before the vote.</li>
                                         <li><b>Vote:</b> Vote for who you think is the Wolf.</li>
                                         <li><b>Result:</b> See who was eliminated and if the game ends!</li>
                                     </ol>
@@ -199,6 +200,16 @@
                                             <input id="turn-count" type="number" class="form-input" value="${room.settings.turnCount}" min="1" max="5">
                                         </div>
                                     </div>
+                                     <div class="grid grid-cols-2 gap-4">
+                                        <div>
+                                            <label for="talk-time" class="font-medium">Talk Time (sec)</label>
+                                            <input id="talk-time" type="number" class="form-input" value="${room.settings.talkTime}" min="10">
+                                        </div>
+                                        <div>
+                                            <label for="final-talk-time" class="font-medium">Final Talk (sec)</label>
+                                            <input id="final-talk-time" type="number" class="form-input" value="${room.settings.finalTalkTime}" min="10">
+                                        </div>
+                                    </div>
                                     <div>
                                         <label for="topic" class="font-medium">Topic</label>
                                         <select id="topic" class="form-select">
@@ -207,8 +218,10 @@
                                         </select>
                                     </div>
                                     <div id="custom-topic-area" class="${room.settings.topic === 'custom' ? '' : 'hidden'} space-y-2">
-                                        <input id="citizen-word" type="text" class="form-input" placeholder="Citizen Word">
-                                        <input id="wolf-word" type="text" class="form-input" placeholder="Wolf Word">
+                                        <div id="custom-pairs-container">
+                                            <!-- Custom pairs will be injected here -->
+                                        </div>
+                                        <button id="add-pair-btn" class="btn btn-secondary w-full text-sm py-2">Add Pair</button>
                                     </div>
                                 </div>
                                 <button id="start-game-btn" class="btn btn-primary w-full mt-6">Start Game</button>
@@ -236,11 +249,12 @@
                     const isEliminated = p.isEliminated ? 'line-through opacity-50' : '';
                     return `<span class="p-2 rounded-full bg-gray-700 ${isEliminated}">${p.name}</span>`;
                 }).join('');
+                const title = room.gameState === 'final_talk_time' ? 'Final Talk Time' : 'Talk Time';
                 return `
                     <div class="screen">
                         <div class="card text-center w-full max-w-2xl">
-                            <p class="text-2xl font-bold mb-4">Talk Time (Round ${room.currentTurn})</p>
-                            <div id="timer-display" class="timer text-violet-400 mb-6">03:00</div>
+                            <p class="text-2xl font-bold mb-4">${title} (Round ${room.currentTurn})</p>
+                            <div id="timer-display" class="timer text-violet-400 mb-6">00:00</div>
                             <p class="font-medium mb-2">Participants</p>
                             <div class="flex flex-wrap justify-center gap-2">${playersHTML}</div>
                         </div>
@@ -351,13 +365,20 @@
 
                 let wordPair;
                 if (settings.topic === 'custom') {
-                    const citizenWord = document.getElementById('citizen-word').value.trim();
-                    const wolfWord = document.getElementById('wolf-word').value.trim();
-                    if (!citizenWord || !wolfWord) {
-                        alert("Please enter both custom words.");
+                    const customPairs = [];
+                    document.querySelectorAll('.custom-pair').forEach(pairEl => {
+                        const citizenWord = pairEl.querySelector('.citizen-word').value.trim();
+                        const wolfWord = pairEl.querySelector('.wolf-word').value.trim();
+                        if (citizenWord && wolfWord) {
+                            customPairs.push([citizenWord, wolfWord]);
+                        }
+                    });
+
+                    if (customPairs.length === 0) {
+                        alert("Please add at least one valid custom word pair.");
                         return;
                     }
-                    wordPair = [citizenWord, wolfWord];
+                    wordPair = customPairs[Math.floor(Math.random() * customPairs.length)];
                 } else {
                     const topicData = settings.language === 'ja' ? TOPICS_JA : TOPICS_EN;
                     wordPair = topicData[settings.topic][Math.floor(Math.random() * topicData[settings.topic].length)];
@@ -388,6 +409,8 @@
                 const timerDisplay = document.getElementById('timer-display');
                 if (!timerDisplay) return;
 
+                const nextState = room.gameState === 'talk_time' ? 'question_time' : 'voting';
+
                 localState.timerInterval = setInterval(async () => {
                     const serverTime = room.phaseEndTime.toMillis();
                     const remaining = Math.max(0, Math.round((serverTime - Date.now()) / 1000));
@@ -398,7 +421,7 @@
                     if (remaining <= 0 && localState.isHost) {
                         clearInterval(localState.timerInterval);
                         const roomRef = doc(db, "rooms", room.id);
-                        await updateDoc(roomRef, { gameState: 'question_time' });
+                        await updateDoc(roomRef, { gameState: nextState });
                     }
                 }, 500);
             }
@@ -417,7 +440,7 @@
                     }
                     
                     localState.isHost = roomData.hostId === localState.userId;
-                    if(localState.timerInterval && roomData.gameState !== 'talk_time') {
+                    if(localState.timerInterval && roomData.gameState !== 'talk_time' && roomData.gameState !== 'final_talk_time') {
                         clearInterval(localState.timerInterval);
                     }
 
@@ -436,6 +459,7 @@
                             }
                             break;
                         case 'talk_time':
+                        case 'final_talk_time':
                             render(getTalkTimeHTML(roomData));
                             handleTimer(roomData);
                             break;
@@ -481,18 +505,38 @@
                         await updateDoc(roomRef, {
                             "settings.wolfCount": parseInt(document.getElementById('wolf-count').value) || 1,
                             "settings.turnCount": parseInt(document.getElementById('turn-count').value) || 3,
+                            "settings.talkTime": parseInt(document.getElementById('talk-time').value) || 180,
+                            "settings.finalTalkTime": parseInt(document.getElementById('final-talk-time').value) || 60,
                             "settings.topic": document.getElementById('topic').value,
                             "settings.language": document.getElementById('language').value,
                         });
                     };
                     
-                    document.getElementById('language').addEventListener('change', updateSettings);
-                    document.getElementById('wolf-count').addEventListener('change', updateSettings);
-                    document.getElementById('turn-count').addEventListener('change', updateSettings);
+                    ['language', 'wolf-count', 'turn-count', 'talk-time', 'final-talk-time'].forEach(id => {
+                        document.getElementById(id).addEventListener('change', updateSettings);
+                    });
+                    
                     document.getElementById('topic').addEventListener('change', () => {
                         document.getElementById('custom-topic-area').classList.toggle('hidden', document.getElementById('topic').value !== 'custom');
                         updateSettings();
                     });
+
+                    document.getElementById('add-pair-btn').addEventListener('click', () => {
+                        const container = document.getElementById('custom-pairs-container');
+                        const pairDiv = document.createElement('div');
+                        pairDiv.className = 'custom-pair flex items-center gap-2 mt-2';
+                        pairDiv.innerHTML = `
+                            <input type="text" class="form-input citizen-word" placeholder="Citizen Word">
+                            <input type="text" class="form-input wolf-word" placeholder="Wolf Word">
+                            <button class="btn btn-secondary p-2 remove-pair-btn">X</button>
+                        `;
+                        container.appendChild(pairDiv);
+                        pairDiv.querySelector('.remove-pair-btn').addEventListener('click', () => pairDiv.remove());
+                    });
+                    // Add one pair initially
+                    if (document.querySelectorAll('.custom-pair').length === 0) {
+                         document.getElementById('add-pair-btn').click();
+                    }
                 }
                 document.getElementById('room-id-display').addEventListener('click', (e) => {
                     navigator.clipboard.writeText(room.id);
@@ -512,7 +556,7 @@
 
                 const allAckd = Object.values(updatedRoom.players).every(p => p.acknowledged);
                 if (allAckd) {
-                    const talkTimeInSeconds = 180;
+                    const talkTimeInSeconds = updatedRoom.settings.talkTime || 180;
                     const phaseEndTime = new Date(Date.now() + talkTimeInSeconds * 1000);
                     await updateDoc(roomRef, { 
                         gameState: 'talk_time',
@@ -525,12 +569,14 @@
                 document.getElementById('ack-word-btn').addEventListener('click', () => handleAcknowledgement(room));
             }
 
-            async function handleQuestionTurn(room, skip = false) {
+            async function handleQuestionTurn(room) {
                 const roomRef = doc(db, "rooms", room.id);
                 const nextIndex = room.currentQuestionerIndex + 1;
                 
                 if (nextIndex >= room.questionerOrder.length) {
-                    await updateDoc(roomRef, { gameState: 'voting' });
+                    const finalTalkTimeInSeconds = room.settings.finalTalkTime || 60;
+                    const phaseEndTime = new Date(Date.now() + finalTalkTimeInSeconds * 1000);
+                    await updateDoc(roomRef, { gameState: 'final_talk_time', phaseEndTime: phaseEndTime });
                 } else {
                     await updateDoc(roomRef, { currentQuestionerIndex: nextIndex });
                 }
@@ -540,7 +586,7 @@
                 const isMyTurn = room.questionerOrder[room.currentQuestionerIndex] === localState.userId;
                 if (isMyTurn) {
                     document.getElementById('next-questioner-btn').addEventListener('click', () => handleQuestionTurn(room));
-                    document.getElementById('skip-question-btn').addEventListener('click', () => handleQuestionTurn(room, true));
+                    document.getElementById('skip-question-btn').addEventListener('click', () => handleQuestionTurn(room));
                 }
             }
 
@@ -620,7 +666,7 @@
                     } else if (currentTurn >= maxTurns) {
                         await updateDoc(roomRef, { gameState: 'end_game', winner: 'wolves' });
                     } else {
-                        const talkTimeInSeconds = 180;
+                        const talkTimeInSeconds = room.settings.talkTime || 180;
                         const phaseEndTime = new Date(Date.now() + talkTimeInSeconds * 1000);
                         const newQuestionerOrder = remainingPlayers.map(p => p.id).sort(() => Math.random() - 0.5);
                         await updateDoc(roomRef, { 
@@ -692,7 +738,7 @@
                     hostId: localState.userId,
                     gameState: 'waiting',
                     players: newPlayer,
-                    settings: { wolfCount: 1, topic: 'food', language: 'en', turnCount: 3 }
+                    settings: { wolfCount: 1, topic: 'food', language: 'en', turnCount: 3, talkTime: 180, finalTalkTime: 60 }
                 });
                 attachRoomListener(roomId);
             }
