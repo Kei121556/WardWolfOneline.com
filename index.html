@@ -123,7 +123,7 @@
 
     <script type="module">
         import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
-        import { getFirestore, doc, setDoc, getDoc, updateDoc, onSnapshot, runTransaction, serverTimestamp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
+        import { getFirestore, doc, setDoc, getDoc, updateDoc, onSnapshot, runTransaction, collection, getDocs, writeBatch, deleteDoc } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
         import { getAuth, signInAnonymously, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
 
         const appContainer = document.getElementById('app-container');
@@ -382,7 +382,7 @@
                     const me = room.players[localState.userId];
                     const isHost = room.hostId === localState.userId;
 
-                    if (me.isEliminated || me.hasVoted) {
+                    if (me.isEliminated || (room.votes && room.votes[localState.userId])) {
                         return `<div class="screen"><div class="card text-center"><p class="text-xl">Vote complete. Waiting for others...</p></div></div>`;
                     }
                     const sortedPlayers = Object.values(room.players).sort((a, b) => a.joinedAt - b.joinedAt);
@@ -521,7 +521,7 @@
                     });
                     
                     const questionerOrder = [...playerIds].sort(() => 0.5 - Math.random());
-
+                    
                     await updateDoc(roomRef, {
                         gameState: 'role_assignment',
                         players: updatedPlayers,
@@ -529,6 +529,7 @@
                         currentTurn: 1,
                         questionerOrder: questionerOrder,
                         currentQuestionerIndex: 0,
+                        votes: {} // Ensure votes map is cleared at the start
                     });
                 }
 
@@ -550,31 +551,15 @@
                         if (timerDisplay) timerDisplay.textContent = `${minutes}:${seconds}`;
 
                         if (room.gameState === 'voting' && localState.isHost && votedCountEl) {
-                            const votedCount = Object.values(room.players).filter(p => !p.isEliminated && p.hasVoted).length;
                             const totalVoters = Object.values(room.players).filter(p => !p.isEliminated).length;
+                            const votedCount = Object.keys(room.votes || {}).length;
                             votedCountEl.textContent = votedCount;
                             totalVotersEl.textContent = totalVoters;
                         }
 
-                        if (remaining <= 0 && localState.isHost) {
+                        if (remaining <= 0 && localState.isHost && room.gameState === 'voting') {
                             clearInterval(localState.timerInterval);
-                            const roomRef = getRoomRef(room.id);
-
-                            switch (room.gameState) {
-                                case 'talk_time':
-                                    await updateDoc(roomRef, { gameState: 'question_time' }); break;
-                                case 'final_talk_time':
-                                    const votingTime = room.settings.votingTime || 30;
-                                    const phaseEndTime = new Date(Date.now() + votingTime * 1000);
-                                    await updateDoc(roomRef, { gameState: 'voting', phaseEndTime }); break;
-                                case 'voting':
-                                    await runTransaction(db, async (transaction) => {
-                                        const roomSnap = await transaction.get(roomRef);
-                                        if (!roomSnap.exists() || roomSnap.data().gameState !== 'voting') return;
-                                        handleVoteTally(roomSnap.data(), roomRef, transaction);
-                                    });
-                                    break;
-                            }
+                            await handleVoteTally(room);
                         }
                     }, 500);
                 }
@@ -582,6 +567,7 @@
                 // --- Main Listener ---
                 
                 function attachRoomListener(roomId) {
+                    localState.roomId = roomId; // Store roomId in local state
                     if (localState.roomUnsubscribe) localState.roomUnsubscribe();
                     const roomRef = getRoomRef(roomId);
                     localState.roomUnsubscribe = onSnapshot(roomRef, (doc) => {
@@ -596,6 +582,15 @@
                         localState.isHost = roomData.hostId === localState.userId;
                         if(localState.timerInterval && !['talk_time', 'final_talk_time', 'voting'].includes(roomData.gameState)) {
                             clearInterval(localState.timerInterval);
+                        }
+
+                        // Host-only logic to check if all votes are in
+                        if (localState.isHost && roomData.gameState === 'voting') {
+                            const activePlayers = Object.values(roomData.players).filter(p => !p.isEliminated);
+                            const votes = roomData.votes || {};
+                            if (Object.keys(votes).length >= activePlayers.length) {
+                                handleVoteTally(roomData);
+                            }
                         }
 
                         switch (roomData.gameState) {
@@ -721,59 +716,66 @@
 
                 async function handleVote(votedId) {
                     const roomRef = getRoomRef(localState.roomId);
+                    await updateDoc(roomRef, {
+                        [`votes.${localState.userId}`]: votedId
+                    });
+                }
+                
+                async function handleVoteTally(room) {
+                    const roomRef = getRoomRef(room.id);
                     await runTransaction(db, async (transaction) => {
-                        const roomSnap = await transaction.get(roomRef);
-                        if (!roomSnap.exists() || roomSnap.data().gameState !== 'voting') { return; }
-                        
-                        const currentRoom = roomSnap.data();
-                        const players = { ...currentRoom.players };
-                        
-                        if (players[localState.userId].hasVoted) return;
-
-                        players[localState.userId].hasVoted = true;
-                        players[votedId].votes = (players[votedId].votes || 0) + 1;
-
-                        const allVoted = Object.values(players).filter(p => !p.isEliminated).every(p => p.hasVoted);
-
-                        if (allVoted) {
-                            handleVoteTally(currentRoom, roomRef, transaction);
-                        } else {
-                            transaction.update(roomRef, { players });
+                        const freshRoomSnap = await transaction.get(roomRef);
+                        if (!freshRoomSnap.exists() || freshRoomSnap.data().gameState !== 'voting') {
+                            console.log("Tally aborted, game state is no longer 'voting'.");
+                            return;
                         }
+                        const players = freshRoomSnap.data().players;
+                        const votes = freshRoomSnap.data().votes || {};
+                        
+                        const voteCounts = {};
+                        Object.values(players).filter(p => !p.isEliminated).forEach(p => {
+                            voteCounts[p.id] = 0;
+                        });
+
+                        for (const voterId in votes) {
+                            const votedForId = votes[voterId];
+                            if (voteCounts[votedForId] !== undefined) {
+                                voteCounts[votedForId]++;
+                            }
+                        }
+
+                        let maxVotes = -1;
+                        let mostVotedIds = [];
+                        for (const playerId in voteCounts) {
+                            if (voteCounts[playerId] > maxVotes) {
+                                maxVotes = voteCounts[playerId];
+                                mostVotedIds = [playerId];
+                            } else if (voteCounts[playerId] === maxVotes) {
+                                mostVotedIds.push(playerId);
+                            }
+                        }
+                        
+                        let lastEliminatedId = null;
+                        const updatedPlayers = { ...players };
+                        if (mostVotedIds.length === 1 && maxVotes > 0) {
+                            lastEliminatedId = mostVotedIds[0];
+                            if (updatedPlayers[lastEliminatedId]) {
+                                updatedPlayers[lastEliminatedId].isEliminated = true;
+                            }
+                        }
+                        
+                        transaction.update(roomRef, { 
+                            gameState: 'results', 
+                            lastEliminatedId: lastEliminatedId, 
+                            players: updatedPlayers,
+                            votes: {} // Clear votes for next round
+                        });
                     });
                 }
 
-                function handleVoteTally(room, roomRef, transaction) {
-                    const players = room.players;
-                    let maxVotes = -1;
-                    let mostVotedIds = [];
-                    Object.values(players).filter(p => !p.isEliminated).forEach(p => {
-                        const pVotes = p.votes || 0;
-                        if (pVotes > maxVotes) {
-                            maxVotes = pVotes;
-                            mostVotedIds = [p.id];
-                        } else if (pVotes === maxVotes) {
-                            mostVotedIds.push(p.id);
-                        }
-                    });
-                    
-                    let lastEliminatedId = null;
-                    const updatedPlayers = { ...players };
-                    if (mostVotedIds.length === 1 && maxVotes > 0) {
-                        lastEliminatedId = mostVotedIds[0];
-                        updatedPlayers[lastEliminatedId].isEliminated = true;
-                    }
-
-                    Object.keys(updatedPlayers).forEach(id => {
-                        updatedPlayers[id].votes = 0;
-                        updatedPlayers[id].hasVoted = false;
-                    });
-                    
-                    transaction.update(roomRef, { gameState: 'results', lastEliminatedId, players: updatedPlayers });
-                }
 
                 function addVotingListeners(room) {
-                    if (room.players[localState.userId]?.isEliminated || room.players[localState.userId]?.hasVoted) return;
+                    if (room.players[localState.userId]?.isEliminated || (room.votes && room.votes[localState.userId])) return;
                     
                     let selectedVoteId = null;
                     const confirmationArea = document.getElementById('vote-confirmation-area');
@@ -915,6 +917,7 @@
                         id: roomId, hostId: localState.userId, gameState: 'waiting', players: newPlayer,
                         settings: { wolfCount: 1, topic: 'ai_choice', language: 'en', turnCount: 1, talkTime: 180, finalTalkTime: 60, votingTime: 30 }
                     });
+                    localState.roomId = roomId;
                     localStorage.setItem('wordWolfRoomId', roomId);
                     attachRoomListener(roomId);
                 }
@@ -1024,4 +1027,3 @@
     </script>
 </body>
 </html>
-ー
