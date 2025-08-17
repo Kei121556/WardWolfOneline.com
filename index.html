@@ -61,8 +61,8 @@
         .rules-list { list-style-position: inside; text-align: left; }
         .rules-list li { margin-bottom: 0.5rem; }
         
-        /* Custom Message Box Styles */
-        #message-box-container {
+        /* Custom Message Box & Confirmation Styles */
+        .modal-container {
             position: fixed;
             top: 0;
             left: 0;
@@ -77,11 +77,11 @@
             pointer-events: none;
             transition: opacity 0.3s ease;
         }
-        #message-box-container.visible {
+        .modal-container.visible {
             opacity: 1;
             pointer-events: auto;
         }
-        #message-box {
+        .modal-box {
             background-color: var(--card-bg);
             border: 1px solid var(--border-color);
             border-radius: 1rem;
@@ -92,10 +92,10 @@
             transform: scale(0.95);
             transition: transform 0.3s ease;
         }
-        #message-box-container.visible #message-box {
+        .modal-container.visible .modal-box {
             transform: scale(1);
         }
-        #message-box-text {
+        .modal-text {
             margin-bottom: 1.5rem;
             font-size: 1.125rem;
             line-height: 1.75rem;
@@ -112,12 +112,24 @@
     </div>
 
     <!-- Custom Message Box HTML -->
-    <div id="message-box-container">
-        <div id="message-box">
-            <p id="message-box-text"></p>
+    <div id="message-box-container" class="modal-container">
+        <div class="modal-box">
+            <p id="message-box-text" class="modal-text"></p>
             <button id="message-box-close" class="btn btn-primary w-full">OK</button>
         </div>
     </div>
+    
+    <!-- Rejoin Confirmation HTML -->
+    <div id="rejoin-prompt-container" class="modal-container">
+        <div class="modal-box">
+            <p id="rejoin-prompt-text" class="modal-text"></p>
+            <div class="flex gap-4">
+                <button id="rejoin-cancel-btn" class="btn btn-secondary w-full">Cancel</button>
+                <button id="rejoin-confirm-btn" class="btn btn-primary w-full">Rejoin</button>
+            </div>
+        </div>
+    </div>
+
 
     <script type="module">
         // Firebase v11.6.1 imports
@@ -127,25 +139,48 @@
 
         const appContainer = document.getElementById('app-container');
         
-        // --- Custom Message Box Logic ---
+        // --- Modal/Message Box Logic ---
         const messageBoxContainer = document.getElementById('message-box-container');
         const messageBoxText = document.getElementById('message-box-text');
         const messageBoxCloseBtn = document.getElementById('message-box-close');
+        let messageBoxCallback = null;
 
-        function showMessage(message, isError = false) {
+        function showMessage(message, callback) {
             messageBoxText.textContent = message;
+            messageBoxCallback = callback || null;
             messageBoxContainer.classList.add('visible');
         }
         messageBoxCloseBtn.addEventListener('click', () => {
             messageBoxContainer.classList.remove('visible');
+            if (messageBoxCallback) {
+                messageBoxCallback();
+            }
         });
+
+        // --- Rejoin Prompt Logic ---
+        const rejoinPromptContainer = document.getElementById('rejoin-prompt-container');
+        const rejoinPromptText = document.getElementById('rejoin-prompt-text');
+        const rejoinConfirmBtn = document.getElementById('rejoin-confirm-btn');
+        const rejoinCancelBtn = document.getElementById('rejoin-cancel-btn');
+
+        function showRejoinPrompt(roomId, onConfirm, onCancel) {
+            rejoinPromptText.textContent = `You were in Room ${roomId}. Would you like to rejoin?`;
+            rejoinConfirmBtn.onclick = () => {
+                rejoinPromptContainer.classList.remove('visible');
+                onConfirm();
+            };
+            rejoinCancelBtn.onclick = () => {
+                rejoinPromptContainer.classList.remove('visible');
+                onCancel();
+            };
+            rejoinPromptContainer.classList.add('visible');
+        }
 
         // --- Firebase Initialization ---
         let db, auth;
         
         async function initializeGame() {
             try {
-                // ★★★ YOUR FIREBASE CONFIG GOES HERE ★★★
                 const firebaseConfig = {
                     apiKey: "AIzaSyDn4Opa-EY6Dm1ZZ1TAGAomTa2EJPjOXxQ",
                     authDomain: "wordwolfononline.firebaseapp.com",
@@ -179,7 +214,7 @@
 
                 // --- Topics ---
                 const TOPICS_EN = { food: [["Curry", "Stew"], ["Udon", "Soba"], ["Beer", "Low-malt Beer"], ["Apple", "Pear"], ["Macaron", "Fatcaron"], ["Sushi", "Sashimi"], ["Coffee", "Tea"], ["Steak", "Hamburger"], ["Pasta", "Pizza"], ["Pancake", "Waffle"], ["Chocolate", "Caramel"], ["Cheese", "Butter"]], places: [["Tokyo Tower", "Skytree"], ["Disneyland", "DisneySea"], ["Kinkaku-ji", "Ginkaku-ji"], ["Ocean", "River"], ["Convenience Store", "Supermarket"], ["Mountain", "Volcano"], ["School", "Hospital"], ["Museum", "Art Gallery"], ["Airport", "Train Station"], ["Park", "Garden"], ["Library", "Bookstore"], ["Cafe", "Restaurant"]], people: [["Actor", "Voice Actor"], ["Santa Claus", "Reindeer"], ["Teacher", "Student"], ["King", "President"], ["Scientist", "Inventor"], ["Artist", "Musician"], ["Chef", "Pâtissier"], ["Athlete", "Coach"], ["Detective", "Police Officer"], ["YouTuber", "Streamer"], ["Pilot", "Astronaut"], ["Farmer", "Gardener"]], actions: [["Running", "Jogging"], ["Cooking", "Eating"], ["Sleeping", "Napping"], ["Studying", "Working"], ["Clapping", "Hand clapping"], ["Singing", "Dancing"], ["Reading", "Writing"], ["Drawing", "Painting"], ["Laughing", "Crying"], ["Walking", "Hiking"], ["Push", "Pull"], ["Throw", "Catch"]], things: [["Smartphone", "Cellphone"], ["Shampoo", "Conditioner"], ["PC", "Laptop"], ["Pencil", "Mechanical Pencil"], ["Umbrella", "Parasol"], ["Chair", "Sofa"], ["Book", "Magazine"], ["Key", "Lock"], ["Watch", "Clock"], ["Glasses", "Sunglasses"], ["Spoon", "Fork"], ["Towel", "Blanket"]], sports: [["Soccer", "Futsal"], ["Baseball", "Softball"], ["Tennis", "Badminton"], ["Table Tennis", "Ping-Pong"], ["Swimming", "Diving"], ["Skiing", "Snowboarding"], ["Basketball", "Volleyball"], ["Judo", "Karate"], ["Golf", "Bowling"], ["Boxing", "Wrestling"], ["Skateboarding", "Surfing"], ["Archery", "Darts"]], entertainment: [["Movie", "Drama"], ["Manga", "Anime"], ["Theater", "Musical"], ["YouTube", "TikTok"], ["Concert", "Festival"], ["Comedy", "Tragedy"], ["Radio", "Podcast"], ["Circus", "Magic Show"], ["Ballet", "Opera"], ["Video Game", "Arcade Game"], ["Novel", "Poem"], ["Sculpture", "Painting"]], animals: [["Dog", "Cat"], ["Lion", "Tiger"], ["Dolphin", "Whale"], ["Hamster", "Guinea Pig"], ["Horse", "Zebra"], ["Chicken", "Duck"], ["Snake", "Lizard"], ["Butterfly", "Moth"], ["Spider", "Scorpion"], ["Rabbit", "Hare"], ["Penguin", "Ostrich"], ["Frog", "Toad"]], nature: [["Sun", "Moon"], ["Mountain", "Hill"], ["Spring", "Autumn"], ["Thunder", "Lightning"], ["Cloud", "Fog"], ["Rain", "Snow"], ["Wind", "Breeze"], ["Star", "Planet"], ["Forest", "Jungle"], ["Desert", "Oasis"], ["River", "Lake"], ["Volcano", "Geyser"]], tech: [["AI", "Robot"], ["Internet", "Intranet"], ["VR", "AR"], ["Programming", "Coding"], ["Drone", "Helicopter"], ["Email", "Letter"], ["Headphones", "Earphones"], ["Camera", "Video Camera"], ["Printer", "Scanner"], ["Tablet", "e-Reader"], ["Mouse", "Keyboard"], ["Battery", "Charger"]], fantasy: [["Wizard", "Witch"], ["Dragon", "Wyvern"], ["Elf", "Dwarf"], ["Hero", "Demon Lord"], ["Ghost", "Zombie"], ["Angel", "Demon"], ["Unicorn", "Pegasus"], ["Vampire", "Werewolf"], ["Mermaid", "Siren"], ["Fairy", "Goblin"], ["Phoenix", "Griffin"], ["Potion", "Spell"]], games: [["Mario", "Luigi"], ["Final Fantasy", "Dragon Quest"], ["Puzzle", "Quiz"], ["Board Game", "Card Game"], ["Pokémon", "Digimon"], ["Minecraft", "Roblox"], ["Chess", "Shogi"], ["Tag", "Hide-and-seek"], ["Poker", "Blackjack"], ["Billiards", "Darts"], ["Monopoly", "Scrabble"], ["Tetris", "Pac-Man"]], history: [["Rome", "Greece"], ["Knight", "Samurai"], ["Pyramid", "Sphinx"], ["World War I", "World War II"], ["Renaissance", "Industrial Revolution"], ["Castle", "Fortress"], ["Viking", "Pirate"], ["Dinosaur", "Mammoth"], ["King", "Emperor"], ["Revolution", "Rebellion"], ["Napoleon", "Caesar"], ["Cleopatra", "Joan of Arc"]], jobs: [["Doctor", "Nurse"], ["Police Officer", "Firefighter"], ["Baker", "Pâtissier"], ["Pilot", "Cabin Attendant"], ["Lawyer", "Prosecutor"], ["Writer", "Journalist"], ["Designer", "Architect"], ["Farmer", "Fisherman"], ["Singer", "Dancer"], ["Engineer", "Mechanic"], ["Photographer", "Videographer"], ["Librarian", "Curator"]], colors: [["Red", "Pink"], ["Black", "Navy"], ["Gold", "Silver"], ["Orange", "Brown"], ["Green", "Lime"], ["Blue", "Sky Blue"], ["Purple", "Lavender"], ["White", "Ivory"], ["Gray", "Charcoal"], ["Beige", "Cream"], ["Turquoise", "Teal"], ["Magenta", "Fuchsia"]], uk: [["Big Ben", "Tower of London"], ["Buckingham Palace", "Windsor Castle"], ["Football", "Rugby"], ["Fish and Chips", "Shepherd's Pie"], ["The Beatles", "The Rolling Stones"], ["Sherlock Holmes", "James Bond"], ["Tea", "Afternoon Tea"], ["England", "Scotland"], ["House of Commons", "House of Lords"], ["Harry Potter", "The Lord of the Rings"], ["Queen", "Oasis"], ["Wimbledon", "The Open Championship"], ["Stonehenge", "Hadrian's Wall"], ["The British Museum", "The National Gallery"], ["Tower Bridge", "London Bridge"], ["Edinburgh Castle", "Cardiff Castle"], ["London", "Manchester"], ["Scone", "Crumpet"], ["Gin", "Whisky"], ["Prince", "Princess"], ["Double-decker bus", "Black cab"], ["King Arthur", "Robin Hood"], ["Thames River", "River Severn"], ["London Eye", "The Shard"], ["Cheddar cheese", "Stilton cheese"], ["Red telephone box", "Red post box"], ["Shakespeare", "Charles Dickens"], ["Oxford University", "Cambridge University"], ["Paddington Bear", "Winnie-the-Pooh"], ["Jaffa Cakes", "Digestive Biscuits"], ["Union Jack", "Flag of England"]] };
-                const TOPICS_JA = { food: [["カレー", "シチュー"], ["うどん", "そば"], ["ビール", "発泡酒"], ["りんご", "なし"], ["マカロン", "トゥンカロン"], ["寿司", "刺身"], ["コーヒー", "紅茶"], ["ステーキ", "ハンバーグ"], ["パスタ", "ピザ"], ["パンケーキ", "ワッフル"], ["チョコレート", "キャラメル"], ["チーズ", "バター"]], places: [["東京タワー", "スカイツリー"], ["ディズニーランド", "ディズニーシー"], ["金閣寺", "銀閣寺"], ["海", "川"], ["コンビニ", "スーパー"], ["山", "火山"], ["学校", "病院"], ["博物館", "美術館"], ["空港", "駅"], ["公園", "庭園"], ["図書館", "本屋"], ["カフェ", "レストラン"]], people: [["俳優", "声優"], ["サンタクロース", "トナカイ"], ["先生", "生徒"], ["王様", "大統領"], ["科学者", "発明家"], ["芸術家", "音楽家"], ["シェフ", "パティシエ"], ["スポーツ選手", "コーチ"], ["探偵", "警察官"], ["YouTuber", "配信者"], ["パイロット", "宇宙飛行士"], ["農家", "庭師"]], actions: [["ランニング", "ジョギング"], ["料理", "食事"], ["睡眠", "昼寝"], ["勉強", "仕事"], ["拍手", "手拍子"], ["歌", "ダンス"], ["読書", "執筆"], ["描画", "絵画"], ["笑う", "泣く"], ["歩く", "ハイキング"], ["押す", "引く"], ["投げる", "キャッチする"]], things: [["スマホ", "携帯電話"], ["シャンプー", "リンス"], ["パソコン", "ノートパソコン"], ["鉛筆", "シャーペン"], ["傘", "日傘"], ["椅子", "ソファ"], ["本", "雑誌"], ["鍵", "錠"], ["腕時計", "時計"], ["メガネ", "サングラス"], ["スプーン", "フォーク"], ["タオル", "毛布"]], sports: [["サッカー", "フットサル"], ["野球", "ソフトボール"], ["テニス", "バドミントン"], ["卓球", "ピンポン"], ["水泳", "飛び込み"], ["スキー", "スノーボード"], ["バスケットボール", "バレーボール"], ["柔道", "空手"], ["ゴルフ", "ボウリング"], ["ボクシング", "レスリング"], ["スケートボード", "サーフィン"], ["アーチェリー", "ダーツ"]], entertainment: [["映画", "ドラマ"], ["漫画", "アニメ"], ["演劇", "ミュージカル"], ["YouTube", "TikTok"], ["コンサート", "フェス"], ["喜劇", "悲劇"], ["ラジオ", "ポッドキャスト"], ["サーカス", "マジックショー"], ["バレエ", "オペラ"], ["テレビゲーム", "アーケードゲーム"], ["小説", "詩"], ["彫刻", "絵画"]], animals: [["犬", "猫"], ["ライオン", "トラ"], ["イルカ", "クジラ"], ["ハムスター", "モルモット"], ["馬", "シマウマ"], ["ニワトリ", "アヒル"], ["ヘビ", "トカゲ"], ["蝶", "蛾"], ["クモ", "サソリ"], ["うさぎ", "野うさぎ"], ["ペンギン", "ダチョウ"], ["カエル", "ヒキガエル"]], nature: [["太陽", "月"], ["山", "丘"], ["春", "秋"], ["雷", "稲妻"], ["雲", "霧"], ["雨", "雪"], ["風", "そよ風"], ["星", "惑星"], ["森", "ジャングル"], ["砂漠", "オアシス"], ["川", "湖"], ["火山", "間欠泉"]], tech: [["AI", "ロボット"], ["インターネット", "イントラネット"], ["VR", "AR"], ["プログラミング", "コーディング"], ["ドローン", "ヘリコプター"], ["Eメール", "手紙"], ["ヘッドホン", "イヤホン"], ["カメラ", "ビデオカメラ"], ["プリンター", "スキャナー"], ["タブレット", "電子書籍リーダー"], ["マウス", "キーボード"], ["バッテリー", "充電器"]], fantasy: [["魔法使い", "魔女"], ["ドラゴン", "ワイバーン"], ["エルフ", "ドワーフ"], ["勇者", "魔王"], ["幽霊", "ゾンビ"], ["天使", "悪魔"], ["ユニコーン", "ペガサス"], ["吸血鬼", "狼男"], ["人魚", "セイレーン"], ["妖精", "ゴブリン"], ["フェニックス", "グリフィン"], ["ポーション", "呪文"]], games: [["マリオ", "ルイージ"], ["ファイナルファンタジー", "ドラゴンクエスト"], ["パズル", "クイズ"], ["ボードゲーム", "カードゲーム"], ["ポケモン", "デジモン"], ["マインクラフト", "ロブロックス"], ["チェス", "将棋"], ["鬼ごっこ", "かくれんぼ"], ["ポーカー", "ブラックジャック"], ["ビリヤード", "ダーツ"], ["モノポリー", "スクラブル"], ["テトリス", "パックマン"]], history: [["ローマ", "ギリシャ"], ["騎士", "侍"], ["ピラミッド", "スフィンクス"], ["第一次世界大戦", "第二次世界大戦"], ["ルネサンス", "産業革命"], ["城", "要塞"], ["バイキング", "海賊"], ["恐竜", "マンモス"], ["王", "皇帝"], ["革命", "反乱"], ["ナポレオン", "カエサル"], ["クレオパトラ", "ジャンヌ・ダルク"]], jobs: [["医者", "看護師"], ["警察官", "消防士"], ["パン屋", "パティシエ"], ["パイロット", "客室乗務員"], ["弁護士", "検察官"], ["作家", "ジャーナリスト"], ["デザイナー", "建築家"], ["農家", "漁師"], ["歌手", "ダンサー"], ["エンジニア", "整備士"], ["写真家", "ビデオグラファー"], ["司書", "学芸員"]], colors: [["赤", "ピンク"], ["黒", "紺"], ["金", "銀"], ["オレンジ", "茶色"], ["緑", "黄緑"], ["青", "水色"], ["紫", "ラベンダー"], ["白", "アイボリー"], ["灰色", "チャコール"], ["ベージュ", "クリーム色"], ["ターコイズ", "ティール"], ["マゼンタ", "フューシャ"]], uk: [["ビッグ・ベン", "ロンドン塔"], ["バッキンガム宮殿", "ウィンザー城"], ["サッカー", "ラグビー"], ["フィッシュ・アンド・チップス", "シェパーズパイ"], ["ビートルズ", "ローリング・ストーンズ"], ["シャーロック・ホームズ", "ジェームズ・ボンド"], ["紅茶", "アフタヌーンティー"], ["イングランド", "スコットランド"], ["庶民院", "貴族院"], ["ハリー・ポッター", "指輪物語"], ["クイーン", "オアシス"], ["ウィンブルドン", "全英オープン"], ["ストーンヘンジ", "ハドリアヌスの長城"], ["大英博物館", "ナショナル・ギャラリー"], ["タワーブリッジ", "ロンドン橋"], ["エディンバラ城", "カーディフ城"], ["ロンドン", "マンチェスター"], ["スコーン", "クランペット"], ["ジン", "ウィスキー"], ["王子", "王女"], ["二階建てバス", "ブラックキャブ"], ["アーサー王", "ロビン・フッド"], ["テムズ川", "セヴァーン川"], ["ロンドン・アイ", "ザ・シャード"], ["チェダーチーズ", "スティルトンチーズ"], ["赤い電話ボックス", "赤い郵便ポスト"], ["シェイクスピア", "チャールズ・ディケンズ"], ["オックスフォード大学", "ケンブリッジ大学"], ["パディントン", "くまのプーさん"], ["ジャファケーキ", "ダイジェストビスケット"], ["ユニオンジャック", "イングランドの旗"]] };
+                const TOPICS_JA = { food: [["カレー", "シチュー"], ["うどん", "そば"], ["ビール", "発泡酒"], ["りんご", "なし"], ["マカロン", "トゥンカロン"], ["寿司", "刺身"], ["コーヒー", "紅茶"], ["ステーキ", "ハンバーグ"], ["パスタ", "ピザ"], ["パンケーキ", "ワッフル"], ["チョコレート", "キャラメル"], ["チーズ", "バター"]], places: [["東京タワー", "スカイツリー"], ["ディズニーランド", "ディズニーシー"], ["金閣寺", "銀閣寺"], ["海", "川"], ["コンビニ", "スーパー"], ["山", "火山"], ["学校", "病院"], ["博物館", "美術館"], ["空港", "駅"], ["公園", "庭園"], ["図書館", "本屋"], ["カフェ", "レストラン"]], people: [["俳優", "声優"], ["サンタクロース", "トナカイ"], ["先生", "生徒"], ["王様", "大統領"], ["科学者", "発明家"], ["芸術家", "音楽家"], ["シェフ", "パティシエ"], ["スポーツ選手", "コーチ"], ["探偵", "警察官"], ["YouTuber", "配信者"], ["パイロット", "宇宙飛行士"], ["農家", "庭師"]], actions: [["ランニング", "ジョギング"], ["料理", "食事"], ["睡眠", "昼寝"], ["勉強", "仕事"], ["拍手", "手拍子"], ["歌", "ダンス"], ["読書", "執筆"], ["描画", "絵画"], ["笑う", "泣く"], ["歩く", "ハイキング"], ["押す", "引く"], ["投げる", "キャッチする"]], things: [["スマホ", "携帯電話"], ["シャンプー", "リンス"], ["パソコン", "ノートパソコン"], ["鉛筆", "シャーペン"], ["傘", "日傘"], ["椅子", "ソファ"], ["本", "雑誌"], ["鍵", "錠"], ["腕時計", "時計"], ["メガネ", "サングラス"], ["スプーン", "フォーク"], ["タオル", "毛布"]], sports: [["サッカー", "フットサル"], ["野球", "ソフトボール"], ["テニス", "バドミントン"], ["卓球", "ピンポン"], ["水泳", "飛び込み"], ["スキー", "スノーボード"], ["バスケットボール", "バレーボール"], ["柔道", "空手"], ["ゴルフ", "ボウリング"], ["ボクシング", "レスリング"], ["スケートボード", "サーフィン"], ["アーチェリー", "ダーツ"]], entertainment: [["映画", "ドラマ"], ["漫画", "アニメ"], ["演劇", "ミュージカル"], ["YouTube", "TikTok"], ["コンサート", "フェス"], ["喜劇", "悲劇"], ["ラジオ", "ポッドキャスト"], ["サーカス", "マジックショー"], ["バレエ", "オペラ"], ["テレビゲーム", "アーケードゲーム"], ["小説", "詩"], ["彫刻", "絵画"]], animals: [["犬", "猫"], ["ライオン", "トラ"], ["イルカ", "クジラ"], ["ハムスター", "モルモット"], ["馬", "シマウマ"], ["ニワトリ", "アヒル"], ["ヘビ", "トカゲ"], ["蝶", "蛾"], ["クモ", "サソリ"], ["うさぎ", "野うさぎ"], ["ペンギン", "ダチョウ"], ["カエル", "ヒキガエル"]], nature: [["太陽", "月"], ["山", "丘"], ["春", "秋"], ["雷", "稲妻"], ["雲", "霧"], ["雨", "雪"], ["風", "そよ風"], ["星", "惑星"], ["森", "ジャングル"], ["砂漠", "オアシス"], ["川", "湖"], ["火山", "間欠泉"]], tech: [["AI", "ロボット"], ["インターネット", "イントラネット"], ["VR", "AR"], ["プログラミング", "コーディング"], ["ドローン", "ヘリコプター"], ["Eメール", "手紙"], ["ヘッドホン", "イヤホン"], ["カメラ", "ビデオカメラ"], ["プリンター", "スキャナー"], ["タブレット", "電子書籍リーダー"], ["マウス", "キーボード"], ["バッテリー", "充電器"]], fantasy: [["魔法使い", "魔女"], ["ドラゴン", "ワイバーン"], ["エルフ", "ドワーフ"], ["勇者", "魔王"], ["幽霊", "ゾンビ"], ["天使", "悪魔"], ["ユニコーン", "ペガサス"], ["吸血鬼", "狼男"], ["人魚", "セイレーン"], ["妖精", "ゴブリン"], ["フェニックス", "グリフィン"], ["ポーション", "呪文"]], games: [["マリオ", "ルイージ"], ["ファイナルファンタジー", "ドラゴンクエスト"], ["パズル", "クイズ"], ["ボードゲーム", "カードゲーム"], ["ポケモン", "デジモン"], ["マインクラフト", "ロブロックス"], ["チェス", "将棋"], ["鬼ごっこ", "かくれんぼ"], ["ポーカー", "ブラックジャック"], ["ビリヤード", "ダーツ"], ["モノポリー", "スクラブル"], ["テトリス", "パックマン"]], history: [["ローマ", "ギリシャ"], ["騎士", "侍"], ["ピラミッド", "スフィンクス"], ["第一次世界大戦", "第二次世界大戦"], ["ルネサンス", "産業革命"], ["城", "要塞"], ["バイキング", "海賊"], ["恐竜", "マンモス"], ["王", "皇帝"], ["革命", "反乱"], ["ナポレオン", "カエサル"], ["クレオパトラ", "ジャンヌ・ダルク"]], jobs: [["医者", "看護師"], ["警察官", "消防士"], ["パン屋", "パティシエ"], ["パイロット", "客室乗務員"], ["弁護士", "検察官"], ["作家", "ジャーナリスト"], ["デザイナー", "建築家"], ["農家", "漁師"], ["歌手", "ダンサー"], ["エンジニア", "整備士"], ["写真家", "ビデオグラファー"], ["司書", "学芸員"]], colors: [["赤", "ピンク"], ["黒", "紺"], ["金", "銀"], ["オレンジ", "茶色"], ["緑", "黄緑"], ["青", "水色"], ["紫", "ラベンダー"], ["白", "アイボリー"], ["灰色", "チャコール"], ["ベージュ", "クリーム色"], ["ターコイズ", "ティール"], ["マゼンタ", "フューシャ"]], uk: [["Big Ben", "Tower of London"], ["Buckingham Palace", "Windsor Castle"], ["Football", "Rugby"], ["Fish and Chips", "Shepherd's Pie"], ["The Beatles", "The Rolling Stones"], ["Sherlock Holmes", "James Bond"], ["Tea", "Afternoon Tea"], ["England", "Scotland"], ["House of Commons", "House of Lords"], ["Harry Potter", "The Lord of the Rings"], ["Queen", "Oasis"], ["Wimbledon", "The Open Championship"], ["Stonehenge", "Hadrian's Wall"], ["The British Museum", "The National Gallery"], ["Tower Bridge", "London Bridge"], ["Edinburgh Castle", "Cardiff Castle"], ["London", "Manchester"], ["Scone", "Crumpet"], ["Gin", "Whisky"], ["Prince", "Princess"], ["Double-decker bus", "Black cab"], ["King Arthur", "Robin Hood"], ["Thames River", "River Severn"], ["London Eye", "The Shard"], ["Cheddar cheese", "Stilton cheese"], ["Red telephone box", "Red post box"], ["Shakespeare", "Charles Dickens"], ["Oxford University", "Cambridge University"], ["Paddington Bear", "Winnie-the-Pooh"], ["Jaffa Cakes", "Digestive Biscuits"], ["Union Jack", "Flag of England"]] };
                 const TOPIC_NAMES_EN = { food: "Food & Drink", places: "Places", people: "People", actions: "Actions", things: "Things", sports: "Sports", entertainment: "Entertainment", animals: "Animals", nature: "Nature", tech: "Technology", fantasy: "Fantasy", games: "Games", history: "History", jobs: "Jobs", colors: "Colors", uk: "About the UK" };
                 const TOPIC_NAMES_JA = { food: "食べ物・飲み物", places: "場所", people: "人物", actions: "行動", things: "モノ", sports: "スポーツ", entertainment: "エンタメ", animals: "動物", nature: "自然", tech: "テクノロジー", fantasy: "ファンタジー", games: "ゲーム", history: "歴史", jobs: "職業", colors: "色", uk: "イギリス関連" };
 
@@ -509,7 +544,7 @@
                     playerIds.forEach((id, index) => {
                         updatedPlayers[id].role = roles[index];
                         updatedPlayers[id].word = roles[index] === 'wolf' ? wordB : wordA;
-                        updatedPlayers[id].acknowledged = false; // Reset acknowledgement
+                        updatedPlayers[id].acknowledged = false;
                     });
                     
                     const questionerOrder = [...playerIds].sort(() => Math.random() - 0.5);
@@ -588,8 +623,8 @@
                         const roomData = doc.data();
                         if (!roomData) {
                             if(localState.roomUnsubscribe) localState.roomUnsubscribe();
-                            showMessage("The host has closed the room.");
-                            setTimeout(() => window.location.href = '/', 3000);
+                            localStorage.removeItem('wordWolfRoomId');
+                            showMessage("The host has closed the room.", () => { window.location.href = '/'; });
                             return;
                         }
                         
@@ -605,7 +640,7 @@
                                 break;
                             case 'role_assignment':
                                 const me = roomData.players[localState.userId];
-                                if (me.acknowledged) {
+                                if (me && me.acknowledged) {
                                     render(`<div class="screen"><div class="card text-center"><p class="text-xl">Waiting for other players to confirm...</p></div></div>`);
                                 } else {
                                     render(getRoleAssignmentHTML(roomData));
@@ -635,6 +670,7 @@
                                 addWolfGuessListeners(roomData);
                                 break;
                             case 'end_game':
+                                localStorage.removeItem('wordWolfRoomId');
                                 render(getEndGameHTML(roomData));
                                 addEndGameListeners(roomData);
                                 break;
@@ -818,7 +854,6 @@
 
                     confirmBtn.addEventListener('click', () => {
                         if (selectedVoteId) {
-                            // Immediate UI feedback
                             render(`<div class="screen"><div class="card text-center"><p class="text-xl">You have voted. Waiting for others...</p></div></div>`);
                             handleVote(selectedVoteId, room);
                         }
@@ -937,17 +972,29 @@
                     if (user) {
                         localState.userId = user.uid;
                         const pathRoomId = window.location.pathname.split('/room/')[1];
+                        const savedRoomId = localStorage.getItem('wordWolfRoomId');
+
                         if(pathRoomId) {
                             await joinRoom(pathRoomId.toUpperCase());
+                        } else if (savedRoomId) {
+                            showRejoinPrompt(
+                                savedRoomId,
+                                () => { joinRoom(savedRoomId); }, // onConfirm
+                                () => { localStorage.removeItem('wordWolfRoomId'); renderHomeScreen(); } // onCancel
+                            );
                         } else {
-                            render(getHomeScreenHTML());
-                            addHomeListeners();
-                            document.getElementById('user-id-display').textContent = user.uid;
+                            renderHomeScreen();
                         }
                     } else {
                         await signInAnonymously(auth);
                     }
                 });
+
+                function renderHomeScreen() {
+                    render(getHomeScreenHTML());
+                    addHomeListeners();
+                    if(localState.userId) document.getElementById('user-id-display').textContent = localState.userId;
+                }
 
                 // --- Helper Functions ---
                 async function createRoom() {
@@ -966,6 +1013,7 @@
                         players: newPlayer,
                         settings: { wolfCount: 1, topic: 'food', language: 'en', turnCount: 1, talkTime: 180, finalTalkTime: 60, votingTime: 30 }
                     });
+                    localStorage.setItem('wordWolfRoomId', roomId);
                     attachRoomListener(roomId);
                 }
 
@@ -983,19 +1031,21 @@
 
                     if (!roomSnap.exists()) {
                         showMessage("Room not found!", true);
+                        localStorage.removeItem('wordWolfRoomId');
                         return;
                     }
                     
                     window.history.pushState({}, '', `/room/${roomId}`);
                     const newPlayerData = { name: localState.playerName, isHost: roomSnap.data().hostId === localState.userId };
                     await updateDoc(roomRef, { [`players.${localState.userId}`]: newPlayerData });
-
+                    
+                    localStorage.setItem('wordWolfRoomId', roomId);
                     attachRoomListener(roomId);
                 }
 
                 function validatePlayerName() {
                     const nameInput = document.getElementById('player-name-input');
-                    if(!nameInput) return true; // Already in a room
+                    if(!nameInput) return true;
                     const playerName = nameInput.value.trim();
                     if (!playerName) {
                         showMessage('Please enter your name.', true);
@@ -1006,16 +1056,10 @@
                     return true;
                 }
             } catch (error) {
-                appContainer.innerHTML = `
-                    <div class="screen">
-                        <div class="card text-center">
-                            <h1 class="text-2xl font-bold text-red-500">An Error Occurred</h1>
-                            <p class="text-gray-400 mt-4">Could not load the game. Please check the Firebase configuration in the code and try again.</p>
-                            <p class="text-xs text-gray-500 mt-2">${error.message}</p>
-                        </div>
-                    </div>
-                `;
                 console.error("Initialization Error:", error);
+                showMessage(`Error: ${error.message}`, () => {
+                    window.location.href = '/'; // Redirect on OK
+                });
             }
         }
         
