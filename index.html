@@ -4,10 +4,17 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Word Wolf Game</title>
+    <!-- SEO: Add a description for search engines -->
+    <meta name="description" content="Word Wolf is a real-time multiplayer word guessing game. Find the player who has a slightly different word from everyone else!">
+    
     <script src="https://cdn.tailwindcss.com"></script>
+    
+    <!-- Performance: Load fonts asynchronously to prevent render blocking -->
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;700&family=Noto+Sans+JP:wght@400;500;700&display=swap" rel="stylesheet">
+    <link rel="preload" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;700&family=Noto+Sans+JP:wght@400;500;700&display=swap" as="style" onload="this.onload=null;this.rel='stylesheet'">
+    <noscript><link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;700&family=Noto+Sans+JP:wght@400;500;700&display=swap"></noscript>
+    
     <style>
         :root {
             --primary-color: #7c3aed; /* Violet */
@@ -16,6 +23,8 @@
             --card-bg: #1f2937; /* Gray 800 */
             --text-color: #f9fafb; /* Gray 50 */
             --border-color: #374151; /* Gray 700 */
+            /* Accessibility: Lighter violet for better contrast */
+            --link-color: #a78bfa; 
         }
         body {
             font-family: 'Inter', 'Noto Sans JP', sans-serif;
@@ -198,7 +207,7 @@
                         <div class="screen">
                             <div class="card text-center">
                                 <h1 class="text-4xl font-bold text-violet-400">Word Wolf</h1>
-                                <p class="text-gray-400 mt-2 mb-8">The Ultimate Word Finding Game</p>
+                                <p class="text-gray-300 mt-2 mb-8">The Ultimate Word Finding Game</p>
                                 <div class="space-y-4">
                                     <input type="text" id="player-name-input" class="form-input text-center" placeholder="Enter your name" value="${localState.playerName}">
                                     <button id="create-room-btn" class="btn btn-primary w-full">Create Room</button>
@@ -211,7 +220,7 @@
                                     <p class="font-bold mb-1">Your User ID:</p>
                                     <p class="font-mono break-all" id="user-id-display">Loading...</p>
                                 </div>
-                                <button id="show-rules-btn" class="text-violet-400 mt-8">How to Play & Credits</button>
+                                <button id="show-rules-btn" style="color: var(--link-color);" class="mt-8">How to Play & Credits</button>
                             </div>
                         </div>
                     `;
@@ -258,12 +267,12 @@
                     const isHost = room.hostId === localState.userId;
                     const playersHTML = Object.values(room.players).map(p => `<span class="p-2 rounded-full bg-gray-700">${p.name} ${p.isHost ? '👑' : ''}</span>`).join('');
                     const topicNames = room.settings.language === 'ja' ? TOPIC_NAMES_JA : TOPIC_NAMES_EN;
-                    const topicOptionsHTML = Object.keys(topicNames).map(key => `<option value="${key}" ${room.settings.topic === key ? 'selected' : ''}>${topicNames[key]}</option>`).join('');
+                    const topicOptionsHTML = Object.keys(topicNames).map(key => `<option value="${key}">${topicNames[key]}</option>`).join('');
 
                     return `
                         <div class="screen">
                             <div class="card text-center">
-                                <p class="text-gray-400">Room ID</p>
+                                <p class="text-gray-300">Room ID</p>
                                 <div class="bg-gray-900 p-3 rounded-md font-mono text-2xl tracking-widest my-2 cursor-pointer" id="room-id-display">${room.id}</div>
                                 <p id="copy-feedback" class="text-sm text-green-400 h-4"></p>
                                 <h2 class="text-xl font-bold mt-6 mb-3">Players (${Object.keys(room.players).length})</h2>
@@ -288,7 +297,7 @@
                                             <label for="topic" class="font-medium">Topic</label>
                                             <select id="topic" class="form-select">
                                                 <option value="ai_choice" ${room.settings.topic === 'ai_choice' ? 'selected' : ''}>AI Choice</option>
-                                                ${topicOptionsHTML}
+                                                ${Object.keys(topicNames).map(key => `<option value="${key}" ${room.settings.topic === key ? 'selected' : ''}>${topicNames[key]}</option>`).join('')}
                                                 <option value="custom" ${room.settings.topic === 'custom' ? 'selected' : ''}>Custom</option>
                                             </select>
                                         </div>
@@ -308,7 +317,7 @@
                                         </div>
                                     </div>
                                     <button id="start-game-btn" class="btn btn-primary w-full mt-6">Start Game</button>
-                                ` : '<p class="text-gray-400 mt-6">Waiting for the host to start the game...</p>'}
+                                ` : '<p class="text-gray-300 mt-6">Waiting for the host to start the game...</p>'}
                             </div>
                         </div>
                     `;
@@ -319,7 +328,7 @@
                     return `
                         <div class="screen">
                             <div class="card text-center">
-                                <p class="text-gray-400 mt-6">Your Word is</p>
+                                <p class="text-gray-300 mt-6">Your Word is</p>
                                 <p class="text-4xl font-bold text-violet-400 my-4">${me.word}</p>
                                 <button id="ack-word-btn" class="btn btn-primary w-full">I Understand</button>
                             </div>
@@ -354,7 +363,7 @@
                         <div class="screen">
                             <div class="card text-center">
                                 <h2 class="text-3xl font-bold mb-4">Question Time</h2>
-                                <p class="text-gray-400 mb-6">It's <span class="font-bold text-violet-400">${questioner.name}'s</span> turn to ask a question.</p>
+                                <p class="text-gray-300 mb-6">It's <span class="font-bold text-violet-400">${questioner.name}'s</span> turn to ask a question.</p>
                                 ${isMyTurn ? `
                                     <p class="mb-4">Ask one person a question, or skip your turn.</p>
                                     <div class="flex gap-4">
@@ -383,7 +392,7 @@
                             <div class="card text-center">
                                 <h2 class="text-3xl font-bold mb-4">Vote Time (Round ${room.currentTurn})</h2>
                                 <div id="timer-display" class="timer text-violet-400 mb-4">00:00</div>
-                                <p class="text-gray-400 mb-6">Who do you think is the Wolf?</p>
+                                <p class="text-gray-300 mb-6">Who do you think is the Wolf?</p>
                                 <div id="vote-buttons-container" class="grid grid-cols-2 sm:grid-cols-3 gap-3">${voteButtonsHTML}</div>
                                 ${isHost ? `<div class="mt-6 text-lg border-t border-gray-700 pt-4">Voted: <span id="voted-count">0</span> / <span id="total-voters">0</span></div>` : ''}
                                 <div id="vote-confirmation-area" class="hidden mt-6 space-y-4 border-t border-gray-700 pt-4">
@@ -414,7 +423,7 @@
                                 <h2 class="text-3xl font-bold mb-4">Vote Results</h2>
                                 <p class="text-xl mb-6">${resultText}</p>
                                 ${roleRevealHTML}
-                                ${isHost ? '<button id="next-round-btn" class="btn btn-primary w-full mt-6">Continue</button>' : '<p class="text-gray-400 mt-6">Waiting for the host to continue...</p>'}
+                                ${isHost ? '<button id="next-round-btn" class="btn btn-primary w-full mt-6">Continue</button>' : '<p class="text-gray-300 mt-6">Waiting for the host to continue...</p>'}
                             </div>
                         </div>
                     `;
@@ -427,7 +436,7 @@
                         <div class="screen">
                             <div class="card text-center">
                                 <h2 class="text-3xl font-bold mb-2">Wolf's Final Guess!</h2>
-                                <p class="text-gray-400 mb-6">${guessingWolf.name}, guess the Citizen's word for a comeback victory!</p>
+                                <p class="text-gray-300 mb-6">${guessingWolf.name}, guess the Citizen's word for a comeback victory!</p>
                                 ${isMyTurn ? `
                                     <input id="wolf-guess-input" type="text" class="form-input text-center mb-4" placeholder="Enter Citizen's word">
                                     <button id="submit-guess-btn" class="btn btn-primary w-full">Submit Guess</button>
@@ -447,7 +456,7 @@
                                     <p>Citizen: <span class="font-bold">${room.words.citizen}</span></p>
                                     <p>Wolf: <span class="font-bold">${room.words.wolf}</span></p>
                                 </div>
-                                ${room.hostId === localState.userId ? '<button id="play-again-btn" class="btn btn-primary w-full mt-6">Play Again</button>' : '<p class="text-gray-400 mt-6">Waiting for the host...</p>'}
+                                ${room.hostId === localState.userId ? '<button id="play-again-btn" class="btn btn-primary w-full mt-6">Play Again</button>' : '<p class="text-gray-300 mt-6">Waiting for the host...</p>'}
                             </div>
                         </div>
                     `;
@@ -470,7 +479,7 @@
 
                     try {
                         if (settings.topic === 'custom') {
-                            const wordList = document.getElementById('custom-word-list').value.split(',')
+                            const wordList = (document.getElementById('custom-word-list').value || '').split(',')
                                 .map(w => w.trim()).filter(w => w);
                             if (wordList.length < 2) {
                                 showMessage("Custom topic needs at least 2 comma-separated words.");
@@ -664,7 +673,9 @@
                         
                         const currentRoom = roomSnap.data();
                         const updatedPlayers = { ...currentRoom.players };
-                        updatedPlayers[localState.userId].acknowledged = true;
+                        if(updatedPlayers[localState.userId]) {
+                           updatedPlayers[localState.userId].acknowledged = true;
+                        }
                         
                         transaction.update(roomRef, { players: updatedPlayers });
 
@@ -730,7 +741,7 @@
                 }
 
                 function addVotingListeners(room) {
-                    if (room.players[localState.userId].isEliminated || room.players[localState.userId].hasVoted) return;
+                    if (room.players[localState.userId]?.isEliminated || room.players[localState.userId]?.hasVoted) return;
                     
                     let selectedVoteId = null;
                     const confirmationArea = document.getElementById('vote-confirmation-area');
@@ -941,7 +952,6 @@
 
                 async function handleAiGeneration() {
                     const categorySelect = document.getElementById('ai-category');
-                    const categoryKey = categorySelect.value;
                     const categoryName = categorySelect.options[categorySelect.selectedIndex].text;
                     const resultArea = document.getElementById('ai-result-area');
                     const generateBtn = document.getElementById('generate-ai-btn');
@@ -963,17 +973,13 @@
                             body: JSON.stringify(payload)
                         });
 
-                        if (!response.ok) {
-                            throw new Error(`API Error: ${response.statusText}`);
-                        }
+                        if (!response.ok) throw new Error(`API Error: ${response.statusText}`);
 
                         const result = await response.json();
                         const text = result.candidates[0].content.parts[0].text;
                         const pair = text.split(',').map(w => w.trim());
 
-                        if (pair.length !== 2) {
-                            throw new Error("AI did not return a valid pair.");
-                        }
+                        if (pair.length !== 2) throw new Error("AI did not return a valid pair.");
 
                         localState.aiGeneratedPair = pair;
                         resultArea.innerHTML = `<p class="text-green-400">Generated: <span class="font-bold">${pair[0]}</span> & <span class="font-bold">${pair[1]}</span></p>`;
