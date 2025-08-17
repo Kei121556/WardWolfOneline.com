@@ -123,7 +123,7 @@
 
     <script type="module">
         import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
-        import { getFirestore, doc, setDoc, getDoc, updateDoc, onSnapshot, runTransaction } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
+        import { getFirestore, doc, setDoc, getDoc, updateDoc, onSnapshot, runTransaction, serverTimestamp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
         import { getAuth, signInAnonymously, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
 
         const appContainer = document.getElementById('app-container');
@@ -265,7 +265,8 @@
 
                 function getWaitingRoomHTML(room) {
                     const isHost = room.hostId === localState.userId;
-                    const playersHTML = Object.values(room.players).map(p => `<span class="p-2 rounded-full bg-gray-700">${p.name} ${p.isHost ? '👑' : ''}</span>`).join('');
+                    const sortedPlayers = Object.values(room.players).sort((a, b) => a.joinedAt - b.joinedAt);
+                    const playersHTML = sortedPlayers.map(p => `<span class="p-2 rounded-full bg-gray-700">${p.name} ${p.isHost ? '👑' : ''}</span>`).join('');
                     const topicNames = room.settings.language === 'ja' ? TOPIC_NAMES_JA : TOPIC_NAMES_EN;
                     const topicOptionsHTML = Object.keys(topicNames).map(key => `<option value="${key}">${topicNames[key]}</option>`).join('');
 
@@ -337,7 +338,8 @@
                 }
                 
                 function getTalkTimeHTML(room) {
-                    const playersHTML = Object.values(room.players).map(p => {
+                    const sortedPlayers = Object.values(room.players).sort((a, b) => a.joinedAt - b.joinedAt);
+                    const playersHTML = sortedPlayers.map(p => {
                         const isEliminated = p.isEliminated ? 'line-through opacity-50' : '';
                         return `<span class="p-2 rounded-full bg-gray-700 ${isEliminated}">${p.name}</span>`;
                     }).join('');
@@ -383,7 +385,8 @@
                     if (me.isEliminated || me.hasVoted) {
                         return `<div class="screen"><div class="card text-center"><p class="text-xl">Vote complete. Waiting for others...</p></div></div>`;
                     }
-                    const voteButtonsHTML = Object.values(room.players)
+                    const sortedPlayers = Object.values(room.players).sort((a, b) => a.joinedAt - b.joinedAt);
+                    const voteButtonsHTML = sortedPlayers
                         .filter(p => !p.isEliminated)
                         .map(p => `<button class="btn btn-secondary w-full" data-vote-id="${p.id}" data-vote-name="${p.name}" ${p.id === localState.userId ? 'disabled' : ''}>${p.name}</button>`)
                         .join('');
@@ -815,38 +818,34 @@
                         const currentTurn = room.currentTurn || 1;
                         const maxTurns = room.settings.turnCount || 1;
 
-                        // SCENARIO 1: A wolf was just eliminated.
-                        if (room.lastEliminatedId && room.players[room.lastEliminatedId].role === 'wolf') {
-                            if (remainingWolves === 0) {
-                                if (room.settings.wolfCount === 1) {
-                                    await updateDoc(roomRef, { gameState: 'wolf_guess' });
-                                    return; 
-                                } else {
-                                    await updateDoc(roomRef, { gameState: 'end_game', winner: 'citizens' });
-                                    return; 
-                                }
+                        // PRIORITY 1: Check if all wolves are gone.
+                        if (remainingWolves === 0) {
+                            // If the eliminated player was the last wolf (and it was a 1-wolf game), give them a final guess.
+                            if (room.lastEliminatedId && room.players[room.lastEliminatedId].role === 'wolf' && room.settings.wolfCount === 1) {
+                                await updateDoc(roomRef, { gameState: 'wolf_guess' });
+                            } else {
+                                // Otherwise (e.g. multiple wolves and the last one was just voted out), citizens win immediately.
+                                await updateDoc(roomRef, { gameState: 'end_game', winner: 'citizens' });
                             }
-                        }
-
-                        // SCENARIO 2: A citizen was eliminated or it was a tie. Check for other win conditions.
-                        if (remainingWolves >= remainingCitizens) {
+                        } 
+                        // PRIORITY 2: Check if wolves now outnumber or equal citizens.
+                        else if (remainingWolves >= remainingCitizens) {
                             await updateDoc(roomRef, { gameState: 'end_game', winner: 'wolves' });
-                            return;
+                        } 
+                        // PRIORITY 3: Check if it's the last turn and wolves are still alive.
+                        else if (currentTurn >= maxTurns) {
+                            await updateDoc(roomRef, { gameState: 'end_game', winner: 'wolves' });
+                        } 
+                        // PRIORITY 4: If no one has won, proceed to the next round.
+                        else {
+                            const talkTimeInSeconds = room.settings.talkTime || 180;
+                            const phaseEndTime = new Date(Date.now() + talkTimeInSeconds * 1000);
+                            const newQuestionerOrder = remainingPlayers.map(p => p.id).sort(() => 0.5 - Math.random());
+                            await updateDoc(roomRef, { 
+                                gameState: 'talk_time', phaseEndTime, lastEliminatedId: null,
+                                currentTurn: currentTurn + 1, questionerOrder: newQuestionerOrder, currentQuestionerIndex: 0
+                            });
                         }
-
-                        if (currentTurn >= maxTurns) {
-                             await updateDoc(roomRef, { gameState: 'end_game', winner: 'wolves' });
-                             return;
-                        }
-
-                        // SCENARIO 3: No one has won yet, proceed to the next round.
-                        const talkTimeInSeconds = room.settings.talkTime || 180;
-                        const phaseEndTime = new Date(Date.now() + talkTimeInSeconds * 1000);
-                        const newQuestionerOrder = remainingPlayers.map(p => p.id).sort(() => 0.5 - Math.random());
-                        await updateDoc(roomRef, { 
-                            gameState: 'talk_time', phaseEndTime, lastEliminatedId: null,
-                            currentTurn: currentTurn + 1, questionerOrder: newQuestionerOrder, currentQuestionerIndex: 0
-                        });
                     });
                 }
 
@@ -869,7 +868,7 @@
                         const roomRef = getRoomRef(room.id);
                         const playersReset = {};
                         Object.keys(room.players).forEach(id => {
-                            playersReset[id] = { name: room.players[id].name, isHost: room.players[id].isHost };
+                            playersReset[id] = { name: room.players[id].name, isHost: room.players[id].isHost, joinedAt: room.players[id].joinedAt };
                         });
                         await updateDoc(roomRef, {
                             gameState: 'waiting', players: playersReset, lastEliminatedId: null, winner: null,
@@ -908,7 +907,7 @@
                     const roomId = Math.random().toString(36).substring(2, 8).toUpperCase();
                     window.history.pushState({}, '', `/room/${roomId}`);
                     const roomRef = getRoomRef(roomId);
-                    const newPlayer = { [localState.userId]: { name: localState.playerName, isHost: true } };
+                    const newPlayer = { [localState.userId]: { name: localState.playerName, isHost: true, joinedAt: Date.now() } };
                     await setDoc(roomRef, {
                         id: roomId, hostId: localState.userId, gameState: 'waiting', players: newPlayer,
                         settings: { wolfCount: 1, topic: 'ai_choice', language: 'en', turnCount: 1, talkTime: 180, finalTalkTime: 60, votingTime: 30 }
@@ -936,7 +935,7 @@
                     }
                     
                     window.history.pushState({}, '', `/room/${roomId}`);
-                    const newPlayerData = { name: localState.playerName, isHost: roomSnap.data().hostId === localState.userId };
+                    const newPlayerData = { name: localState.playerName, isHost: roomSnap.data().hostId === localState.userId, joinedAt: Date.now() };
                     await updateDoc(roomRef, { [`players.${localState.userId}`]: newPlayerData });
                     
                     localStorage.setItem('wordWolfRoomId', roomId);
