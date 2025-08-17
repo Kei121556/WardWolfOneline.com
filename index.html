@@ -123,7 +123,7 @@
         // Firebase v11.6.1 imports
         import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
         import { getFirestore, doc, setDoc, getDoc, updateDoc, onSnapshot, runTransaction, serverTimestamp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
-        import { getAuth, signInAnonymously, onAuthStateChanged, signInWithCustomToken } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
+        import { getAuth, signInAnonymously, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
 
         const appContainer = document.getElementById('app-container');
         
@@ -142,17 +142,21 @@
 
         // --- Firebase Initialization ---
         let db, auth;
-        // These variables are provided by the environment.
-        const appId = typeof __app_id !== 'undefined' ? __app_id : 'default-app-id';
         
         async function initializeGame() {
             try {
-                // Use the environment-provided config.
-                const firebaseConfigStr = typeof __firebase_config !== 'undefined' ? __firebase_config : '{}';
-                if (firebaseConfigStr === '{}') {
-                     throw new Error("Firebase configuration is missing.");
-                }
-                const firebaseConfig = JSON.parse(firebaseConfigStr);
+                // ★★★ YOUR FIREBASE CONFIG GOES HERE ★★★
+                // このオブジェクトを、ご自身のFirebaseプロジェクトの設定情報に置き換えてください。
+                // Firebaseコンソール > プロジェクト設定 > 全般 > マイアプリ > SDK の設定と構成
+                const firebaseConfig = {
+  apiKey: "AIzaSyDn4Opa-EY6Dm1ZZ1TAGAomTa2EJPjOXxQ",
+  authDomain: "wordwolfononline.firebaseapp.com",
+  projectId: "wordwolfononline",
+  storageBucket: "wordwolfononline.firebasestorage.app",
+  messagingSenderId: "215407092675",
+  appId: "1:215407092675:web:a2d2f71de0c71430e71376",
+  measurementId: "G-BGJL4PKZ19"
+};
                 
                 const app = initializeApp(firebaseConfig);
                 db = getFirestore(app);
@@ -169,7 +173,8 @@
 
                 // Helper to get the correct Firestore document reference
                 function getRoomRef(roomId) {
-                    return doc(db, "artifacts", appId, "public/data/rooms", roomId);
+                    // Simplified path for portability
+                    return doc(db, "rooms", roomId);
                 }
 
                 // --- Topics (unchanged) ---
@@ -948,12 +953,7 @@
                             document.getElementById('user-id-display').textContent = user.uid;
                         }
                     } else {
-                        // Use custom token if available, otherwise sign in anonymously
-                        if (typeof __initial_auth_token !== 'undefined' && __initial_auth_token) {
-                            await signInWithCustomToken(auth, __initial_auth_token);
-                        } else {
-                            await signInAnonymously(auth);
-                        }
+                        await signInAnonymously(auth);
                     }
                 });
 
@@ -1018,7 +1018,7 @@
                     <div class="screen">
                         <div class="card text-center">
                             <h1 class="text-2xl font-bold text-red-500">エラーが発生しました</h1>
-                            <p class="text-gray-400 mt-4">ゲームを読み込めませんでした。Firebaseの設定を確認して、もう一度お試しください。</p>
+                            <p class="text-gray-400 mt-4">ゲームを読み込めませんでした。コード内のFirebase設定を更新したか確認してください。</p>
                             <p class="text-xs text-gray-500 mt-2">${error.message}</p>
                         </div>
                     </div>
