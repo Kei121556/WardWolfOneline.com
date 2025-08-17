@@ -82,7 +82,7 @@
         };
 
         import { initializeApp } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-app.js";
-        import { getFirestore, doc, setDoc, getDoc, updateDoc, onSnapshot, serverTimestamp, deleteDoc } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-firestore.js";
+        import { getFirestore, doc, setDoc, getDoc, updateDoc, onSnapshot, runTransaction } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-firestore.js";
         import { getAuth, signInAnonymously, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-auth.js";
 
         const appContainer = document.getElementById('app-container');
@@ -623,19 +623,27 @@
 
             async function handleVote(votedId, room) {
                 const roomRef = doc(db, "rooms", room.id);
-                const currentVotes = room.players[votedId].votes || 0;
-                await updateDoc(roomRef, {
-                    [`players.${localState.userId}.hasVoted`]: true,
-                    [`players.${votedId}.votes`]: currentVotes + 1
+                
+                await runTransaction(db, async (transaction) => {
+                    const roomSnap = await transaction.get(roomRef);
+                    if (!roomSnap.exists()) { throw "Room does not exist!"; }
+                    
+                    const currentRoom = roomSnap.data();
+                    const currentVotes = currentRoom.players[votedId].votes || 0;
+                    
+                    const updates = {};
+                    updates[`players.${localState.userId}.hasVoted`] = true;
+                    updates[`players.${votedId}.votes`] = currentVotes + 1;
+                    transaction.update(roomRef, updates);
+
+                    const updatedPlayers = { ...currentRoom.players };
+                    updatedPlayers[localState.userId].hasVoted = true;
+
+                    const allVoted = Object.values(updatedPlayers).filter(p => !p.isEliminated).every(p => p.hasVoted);
+                    if (allVoted) {
+                        tallyVotesAndProceed(updatedPlayers, roomRef, transaction);
+                    }
                 });
-
-                const updatedRoomSnap = await getDoc(roomRef);
-                const updatedRoom = updatedRoomSnap.data();
-
-                const allVoted = Object.values(updatedRoom.players).filter(p => !p.isEliminated).every(p => p.hasVoted);
-                if (allVoted) {
-                    tallyVotesAndProceed(updatedRoom);
-                }
             }
 
             function addVotingListeners(room) {
@@ -677,11 +685,10 @@
                 });
             }
 
-            async function tallyVotesAndProceed(room) {
-                const roomRef = doc(db, "rooms", room.id);
+            function tallyVotesAndProceed(players, roomRef, transaction) {
                 let maxVotes = -1;
                 let mostVotedIds = [];
-                Object.values(room.players).filter(p => !p.isEliminated).forEach(p => {
+                Object.values(players).filter(p => !p.isEliminated).forEach(p => {
                     const pVotes = p.votes || 0;
                     if (pVotes > maxVotes) {
                         maxVotes = pVotes;
@@ -701,12 +708,12 @@
                     updatePayload[`players.${lastEliminatedId}.isEliminated`] = true;
                 }
                 
-                Object.keys(room.players).forEach(id => {
+                Object.keys(players).forEach(id => {
                     updatePayload[`players.${id}.votes`] = 0;
                     updatePayload[`players.${id}.hasVoted`] = false;
                 });
 
-                await updateDoc(roomRef, updatePayload);
+                transaction.update(roomRef, updatePayload);
             }
 
             function addResultsListeners(room) {
