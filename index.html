@@ -571,7 +571,7 @@
                                     await runTransaction(db, async (transaction) => {
                                         const roomSnap = await transaction.get(roomRef);
                                         if (!roomSnap.exists() || roomSnap.data().gameState !== 'voting') return;
-                                        tallyVotesAndProceed(roomSnap.data().players, roomRef, transaction);
+                                        handleVoteTally(roomSnap.data(), roomRef, transaction);
                                     });
                                     break;
                             }
@@ -719,28 +719,57 @@
                     }
                 }
 
-                async function handleVote(votedId, room) {
-                    const roomRef = getRoomRef(room.id);
+                async function handleVote(votedId) {
+                    const roomRef = getRoomRef(localState.roomId);
                     await runTransaction(db, async (transaction) => {
                         const roomSnap = await transaction.get(roomRef);
                         if (!roomSnap.exists() || roomSnap.data().gameState !== 'voting') { return; }
                         
                         const currentRoom = roomSnap.data();
-                        const updatedPlayers = { ...currentRoom.players };
+                        const players = { ...currentRoom.players };
                         
-                        if (updatedPlayers[localState.userId].hasVoted) return;
+                        if (players[localState.userId].hasVoted) return;
 
-                        const currentVotes = updatedPlayers[votedId].votes || 0;
-                        updatedPlayers[localState.userId].hasVoted = true;
-                        updatedPlayers[votedId].votes = currentVotes + 1;
-                        
-                        transaction.update(roomRef, { players: updatedPlayers });
+                        players[localState.userId].hasVoted = true;
+                        players[votedId].votes = (players[votedId].votes || 0) + 1;
 
-                        const allVoted = Object.values(updatedPlayers).filter(p => !p.isEliminated).every(p => p.hasVoted);
+                        const allVoted = Object.values(players).filter(p => !p.isEliminated).every(p => p.hasVoted);
+
                         if (allVoted) {
-                            tallyVotesAndProceed(updatedPlayers, roomRef, transaction);
+                            handleVoteTally(currentRoom, roomRef, transaction);
+                        } else {
+                            transaction.update(roomRef, { players });
                         }
                     });
+                }
+
+                function handleVoteTally(room, roomRef, transaction) {
+                    const players = room.players;
+                    let maxVotes = -1;
+                    let mostVotedIds = [];
+                    Object.values(players).filter(p => !p.isEliminated).forEach(p => {
+                        const pVotes = p.votes || 0;
+                        if (pVotes > maxVotes) {
+                            maxVotes = pVotes;
+                            mostVotedIds = [p.id];
+                        } else if (pVotes === maxVotes) {
+                            mostVotedIds.push(p.id);
+                        }
+                    });
+                    
+                    let lastEliminatedId = null;
+                    const updatedPlayers = { ...players };
+                    if (mostVotedIds.length === 1 && maxVotes > 0) {
+                        lastEliminatedId = mostVotedIds[0];
+                        updatedPlayers[lastEliminatedId].isEliminated = true;
+                    }
+
+                    Object.keys(updatedPlayers).forEach(id => {
+                        updatedPlayers[id].votes = 0;
+                        updatedPlayers[id].hasVoted = false;
+                    });
+                    
+                    transaction.update(roomRef, { gameState: 'results', lastEliminatedId, players: updatedPlayers });
                 }
 
                 function addVotingListeners(room) {
@@ -779,33 +808,9 @@
                     confirmBtn.addEventListener('click', () => {
                         if (selectedVoteId) {
                             render(`<div class="screen"><div class="card text-center"><p class="text-xl">You have voted. Waiting for others...</p></div></div>`);
-                            handleVote(selectedVoteId, room);
+                            handleVote(selectedVoteId);
                         }
                     });
-                }
-
-                function tallyVotesAndProceed(players, roomRef, transaction) {
-                    let maxVotes = -1;
-                    let mostVotedIds = [];
-                    Object.values(players).filter(p => !p.isEliminated).forEach(p => {
-                        const pVotes = p.votes || 0;
-                        if (pVotes > maxVotes) { maxVotes = pVotes; mostVotedIds = [p.id]; } 
-                        else if (pVotes === maxVotes) { mostVotedIds.push(p.id); }
-                    });
-                    
-                    let lastEliminatedId = null;
-                    const updatedPlayers = { ...players };
-                    if (mostVotedIds.length === 1 && maxVotes > 0) {
-                        lastEliminatedId = mostVotedIds[0];
-                        updatedPlayers[lastEliminatedId].isEliminated = true;
-                    }
-
-                    Object.keys(updatedPlayers).forEach(id => {
-                        updatedPlayers[id].votes = 0;
-                        updatedPlayers[id].hasVoted = false;
-                    });
-                    
-                    transaction.update(roomRef, { gameState: 'results', lastEliminatedId, players: updatedPlayers });
                 }
 
                 function addResultsListeners(room) {
@@ -820,11 +825,9 @@
 
                         // PRIORITY 1: Check if all wolves are gone.
                         if (remainingWolves === 0) {
-                            // If the eliminated player was the last wolf (and it was a 1-wolf game), give them a final guess.
                             if (room.lastEliminatedId && room.players[room.lastEliminatedId].role === 'wolf' && room.settings.wolfCount === 1) {
                                 await updateDoc(roomRef, { gameState: 'wolf_guess' });
                             } else {
-                                // Otherwise (e.g. multiple wolves and the last one was just voted out), citizens win immediately.
                                 await updateDoc(roomRef, { gameState: 'end_game', winner: 'citizens' });
                             }
                         } 
@@ -938,6 +941,7 @@
                     const newPlayerData = { name: localState.playerName, isHost: roomSnap.data().hostId === localState.userId, joinedAt: Date.now() };
                     await updateDoc(roomRef, { [`players.${localState.userId}`]: newPlayerData });
                     
+                    localState.roomId = roomId;
                     localStorage.setItem('wordWolfRoomId', roomId);
                     attachRoomListener(roomId);
                 }
@@ -1020,3 +1024,4 @@
     </script>
 </body>
 </html>
+ー
