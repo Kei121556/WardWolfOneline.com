@@ -287,9 +287,9 @@
                                         <div>
                                             <label for="topic" class="font-medium">Topic</label>
                                             <select id="topic" class="form-select">
-                                                <option value="ai_choice">🤖 AI Choice</option>
+                                                <option value="ai_choice" ${room.settings.topic === 'ai_choice' ? 'selected' : ''}>AI Choice</option>
                                                 ${topicOptionsHTML}
-                                                <option value="custom">Custom</option>
+                                                <option value="custom" ${room.settings.topic === 'custom' ? 'selected' : ''}>Custom</option>
                                             </select>
                                         </div>
                                         <!-- AI Choice Area -->
@@ -647,7 +647,6 @@
                                 aiArea.classList.add('hidden');
                             }
                         });
-                        // Trigger change to set initial state
                         topicSelect.dispatchEvent(new Event('change'));
                     }
                     document.getElementById('room-id-display').addEventListener('click', (e) => {
