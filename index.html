@@ -814,23 +814,39 @@
                         const remainingCitizens = remainingPlayers.length - remainingWolves;
                         const currentTurn = room.currentTurn || 1;
                         const maxTurns = room.settings.turnCount || 1;
-                        
-                        if (room.lastEliminatedId && room.players[room.lastEliminatedId].role === 'wolf' && remainingWolves === 0 && room.settings.wolfCount === 1) {
-                            await updateDoc(roomRef, { gameState: 'wolf_guess' }); return;
+
+                        // SCENARIO 1: A wolf was just eliminated.
+                        if (room.lastEliminatedId && room.players[room.lastEliminatedId].role === 'wolf') {
+                            if (remainingWolves === 0) {
+                                if (room.settings.wolfCount === 1) {
+                                    await updateDoc(roomRef, { gameState: 'wolf_guess' });
+                                    return; 
+                                } else {
+                                    await updateDoc(roomRef, { gameState: 'end_game', winner: 'citizens' });
+                                    return; 
+                                }
+                            }
                         }
 
-                        if (remainingWolves === 0) { await updateDoc(roomRef, { gameState: 'end_game', winner: 'citizens' }); } 
-                        else if (remainingWolves >= remainingCitizens) { await updateDoc(roomRef, { gameState: 'end_game', winner: 'wolves' }); } 
-                        else if (currentTurn >= maxTurns) { await updateDoc(roomRef, { gameState: 'end_game', winner: 'wolves' }); } 
-                        else {
-                            const talkTimeInSeconds = room.settings.talkTime || 180;
-                            const phaseEndTime = new Date(Date.now() + talkTimeInSeconds * 1000);
-                            const newQuestionerOrder = remainingPlayers.map(p => p.id).sort(() => 0.5 - Math.random());
-                            await updateDoc(roomRef, { 
-                                gameState: 'talk_time', phaseEndTime, lastEliminatedId: null,
-                                currentTurn: currentTurn + 1, questionerOrder: newQuestionerOrder, currentQuestionerIndex: 0
-                            });
+                        // SCENARIO 2: A citizen was eliminated or it was a tie. Check for other win conditions.
+                        if (remainingWolves >= remainingCitizens) {
+                            await updateDoc(roomRef, { gameState: 'end_game', winner: 'wolves' });
+                            return;
                         }
+
+                        if (currentTurn >= maxTurns) {
+                             await updateDoc(roomRef, { gameState: 'end_game', winner: 'wolves' });
+                             return;
+                        }
+
+                        // SCENARIO 3: No one has won yet, proceed to the next round.
+                        const talkTimeInSeconds = room.settings.talkTime || 180;
+                        const phaseEndTime = new Date(Date.now() + talkTimeInSeconds * 1000);
+                        const newQuestionerOrder = remainingPlayers.map(p => p.id).sort(() => 0.5 - Math.random());
+                        await updateDoc(roomRef, { 
+                            gameState: 'talk_time', phaseEndTime, lastEliminatedId: null,
+                            currentTurn: currentTurn + 1, questionerOrder: newQuestionerOrder, currentQuestionerIndex: 0
+                        });
                     });
                 }
 
