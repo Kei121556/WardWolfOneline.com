@@ -1,9 +1,9 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="ja">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Word Wolf Game</title>
+    <title>ワードウルフゲーム</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -60,37 +60,100 @@
         @media (min-width: 640px) { .timer { font-size: 6rem; } }
         .rules-list { list-style-position: inside; text-align: left; }
         .rules-list li { margin-bottom: 0.5rem; }
+        
+        /* Custom Message Box Styles */
+        #message-box-container {
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background-color: rgba(0,0,0,0.5);
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            z-index: 1000;
+            opacity: 0;
+            pointer-events: none;
+            transition: opacity 0.3s ease;
+        }
+        #message-box-container.visible {
+            opacity: 1;
+            pointer-events: auto;
+        }
+        #message-box {
+            background-color: var(--card-bg);
+            border: 1px solid var(--border-color);
+            border-radius: 1rem;
+            padding: 2rem;
+            width: 90%;
+            max-width: 400px;
+            text-align: center;
+            transform: scale(0.95);
+            transition: transform 0.3s ease;
+        }
+        #message-box-container.visible #message-box {
+            transform: scale(1);
+        }
+        #message-box-text {
+            margin-bottom: 1.5rem;
+            font-size: 1.125rem;
+            line-height: 1.75rem;
+        }
     </style>
 </head>
 <body>
     <div id="app-container">
         <div class="screen">
             <div class="card text-center">
-                <p class="text-2xl">Loading Game...</p>
+                <p class="text-2xl">ゲームを読み込んでいます...</p>
             </div>
         </div>
     </div>
 
-    <script type="module">
-        const firebaseConfig = {
-            apiKey: "AIzaSyB8AfXF8pVOQpW912jrBOuTzyB3BnUMHtc",
-            authDomain: "wordwolfonline-com.firebaseapp.com",
-            projectId: "wordwolfonline-com",
-            storageBucket: "wordwolfonline-com.appspot.com",
-            messagingSenderId: "831273321343",
-            appId: "1:831273321343:web:c43481ad7b5cabf216504a"
-        };
+    <!-- Custom Message Box HTML -->
+    <div id="message-box-container">
+        <div id="message-box">
+            <p id="message-box-text"></p>
+            <button id="message-box-close" class="btn btn-primary w-full">OK</button>
+        </div>
+    </div>
 
-        import { initializeApp } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-app.js";
-        import { getFirestore, doc, setDoc, getDoc, updateDoc, onSnapshot, runTransaction } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-firestore.js";
-        import { getAuth, signInAnonymously, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-auth.js";
+    <script type="module">
+        // Firebase v11.6.1 imports
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
+        import { getFirestore, doc, setDoc, getDoc, updateDoc, onSnapshot, runTransaction, serverTimestamp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
+        import { getAuth, signInAnonymously, onAuthStateChanged, signInWithCustomToken } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
 
         const appContainer = document.getElementById('app-container');
+        
+        // --- Custom Message Box Logic ---
+        const messageBoxContainer = document.getElementById('message-box-container');
+        const messageBoxText = document.getElementById('message-box-text');
+        const messageBoxCloseBtn = document.getElementById('message-box-close');
 
+        function showMessage(message, isError = false) {
+            messageBoxText.textContent = message;
+            messageBoxContainer.classList.add('visible');
+        }
+        messageBoxCloseBtn.addEventListener('click', () => {
+            messageBoxContainer.classList.remove('visible');
+        });
+
+        // --- Firebase Initialization ---
+        let db, auth;
+        // These variables are provided by the environment.
+        const appId = typeof __app_id !== 'undefined' ? __app_id : 'default-app-id';
+        
         try {
+            // Use the environment-provided config.
+            const firebaseConfig = JSON.parse(typeof __firebase_config !== 'undefined' ? __firebase_config : '{}');
+            if (!firebaseConfig.apiKey) {
+                throw new Error("Firebase configuration is missing.");
+            }
             const app = initializeApp(firebaseConfig);
-            const db = getFirestore(app);
-            const auth = getAuth(app);
+            db = getFirestore(app);
+            auth = getAuth(app);
 
             let localState = {
                 userId: null,
@@ -101,8 +164,14 @@
                 timerInterval: null,
             };
 
+            // Helper to get the correct Firestore document reference
+            function getRoomRef(roomId) {
+                return doc(db, "artifacts", appId, "public/data/rooms", roomId);
+            }
+
+            // --- Topics (unchanged) ---
             const TOPICS_EN = { food: [["Curry", "Stew"], ["Udon", "Soba"], ["Beer", "Low-malt Beer"], ["Apple", "Pear"], ["Macaron", "Fatcaron"], ["Sushi", "Sashimi"], ["Coffee", "Tea"], ["Steak", "Hamburger"], ["Pasta", "Pizza"], ["Pancake", "Waffle"], ["Chocolate", "Caramel"], ["Cheese", "Butter"]], places: [["Tokyo Tower", "Skytree"], ["Disneyland", "DisneySea"], ["Kinkaku-ji", "Ginkaku-ji"], ["Ocean", "River"], ["Convenience Store", "Supermarket"], ["Mountain", "Volcano"], ["School", "Hospital"], ["Museum", "Art Gallery"], ["Airport", "Train Station"], ["Park", "Garden"], ["Library", "Bookstore"], ["Cafe", "Restaurant"]], people: [["Actor", "Voice Actor"], ["Santa Claus", "Reindeer"], ["Teacher", "Student"], ["King", "President"], ["Scientist", "Inventor"], ["Artist", "Musician"], ["Chef", "Pâtissier"], ["Athlete", "Coach"], ["Detective", "Police Officer"], ["YouTuber", "Streamer"], ["Pilot", "Astronaut"], ["Farmer", "Gardener"]], actions: [["Running", "Jogging"], ["Cooking", "Eating"], ["Sleeping", "Napping"], ["Studying", "Working"], ["Clapping", "Hand clapping"], ["Singing", "Dancing"], ["Reading", "Writing"], ["Drawing", "Painting"], ["Laughing", "Crying"], ["Walking", "Hiking"], ["Push", "Pull"], ["Throw", "Catch"]], things: [["Smartphone", "Cellphone"], ["Shampoo", "Conditioner"], ["PC", "Laptop"], ["Pencil", "Mechanical Pencil"], ["Umbrella", "Parasol"], ["Chair", "Sofa"], ["Book", "Magazine"], ["Key", "Lock"], ["Watch", "Clock"], ["Glasses", "Sunglasses"], ["Spoon", "Fork"], ["Towel", "Blanket"]], sports: [["Soccer", "Futsal"], ["Baseball", "Softball"], ["Tennis", "Badminton"], ["Table Tennis", "Ping-Pong"], ["Swimming", "Diving"], ["Skiing", "Snowboarding"], ["Basketball", "Volleyball"], ["Judo", "Karate"], ["Golf", "Bowling"], ["Boxing", "Wrestling"], ["Skateboarding", "Surfing"], ["Archery", "Darts"]], entertainment: [["Movie", "Drama"], ["Manga", "Anime"], ["Theater", "Musical"], ["YouTube", "TikTok"], ["Concert", "Festival"], ["Comedy", "Tragedy"], ["Radio", "Podcast"], ["Circus", "Magic Show"], ["Ballet", "Opera"], ["Video Game", "Arcade Game"], ["Novel", "Poem"], ["Sculpture", "Painting"]], animals: [["Dog", "Cat"], ["Lion", "Tiger"], ["Dolphin", "Whale"], ["Hamster", "Guinea Pig"], ["Horse", "Zebra"], ["Chicken", "Duck"], ["Snake", "Lizard"], ["Butterfly", "Moth"], ["Spider", "Scorpion"], ["Rabbit", "Hare"], ["Penguin", "Ostrich"], ["Frog", "Toad"]], nature: [["Sun", "Moon"], ["Mountain", "Hill"], ["Spring", "Autumn"], ["Thunder", "Lightning"], ["Cloud", "Fog"], ["Rain", "Snow"], ["Wind", "Breeze"], ["Star", "Planet"], ["Forest", "Jungle"], ["Desert", "Oasis"], ["River", "Lake"], ["Volcano", "Geyser"]], tech: [["AI", "Robot"], ["Internet", "Intranet"], ["VR", "AR"], ["Programming", "Coding"], ["Drone", "Helicopter"], ["Email", "Letter"], ["Headphones", "Earphones"], ["Camera", "Video Camera"], ["Printer", "Scanner"], ["Tablet", "e-Reader"], ["Mouse", "Keyboard"], ["Battery", "Charger"]], fantasy: [["Wizard", "Witch"], ["Dragon", "Wyvern"], ["Elf", "Dwarf"], ["Hero", "Demon Lord"], ["Ghost", "Zombie"], ["Angel", "Demon"], ["Unicorn", "Pegasus"], ["Vampire", "Werewolf"], ["Mermaid", "Siren"], ["Fairy", "Goblin"], ["Phoenix", "Griffin"], ["Potion", "Spell"]], games: [["Mario", "Luigi"], ["Final Fantasy", "Dragon Quest"], ["Puzzle", "Quiz"], ["Board Game", "Card Game"], ["Pokémon", "Digimon"], ["Minecraft", "Roblox"], ["Chess", "Shogi"], ["Tag", "Hide-and-seek"], ["Poker", "Blackjack"], ["Billiards", "Darts"], ["Monopoly", "Scrabble"], ["Tetris", "Pac-Man"]], history: [["Rome", "Greece"], ["Knight", "Samurai"], ["Pyramid", "Sphinx"], ["World War I", "World War II"], ["Renaissance", "Industrial Revolution"], ["Castle", "Fortress"], ["Viking", "Pirate"], ["Dinosaur", "Mammoth"], ["King", "Emperor"], ["Revolution", "Rebellion"], ["Napoleon", "Caesar"], ["Cleopatra", "Joan of Arc"]], jobs: [["Doctor", "Nurse"], ["Police Officer", "Firefighter"], ["Baker", "Pâtissier"], ["Pilot", "Cabin Attendant"], ["Lawyer", "Prosecutor"], ["Writer", "Journalist"], ["Designer", "Architect"], ["Farmer", "Fisherman"], ["Singer", "Dancer"], ["Engineer", "Mechanic"], ["Photographer", "Videographer"], ["Librarian", "Curator"]], colors: [["Red", "Pink"], ["Black", "Navy"], ["Gold", "Silver"], ["Orange", "Brown"], ["Green", "Lime"], ["Blue", "Sky Blue"], ["Purple", "Lavender"], ["White", "Ivory"], ["Gray", "Charcoal"], ["Beige", "Cream"], ["Turquoise", "Teal"], ["Magenta", "Fuchsia"]], uk: [["Big Ben", "Tower of London"], ["Buckingham Palace", "Windsor Castle"], ["Football", "Rugby"], ["Fish and Chips", "Shepherd's Pie"], ["The Beatles", "The Rolling Stones"], ["Sherlock Holmes", "James Bond"], ["Tea", "Afternoon Tea"], ["England", "Scotland"], ["House of Commons", "House of Lords"], ["Harry Potter", "The Lord of the Rings"], ["Queen", "Oasis"], ["Wimbledon", "The Open Championship"], ["Stonehenge", "Hadrian's Wall"], ["The British Museum", "The National Gallery"], ["Tower Bridge", "London Bridge"], ["Edinburgh Castle", "Cardiff Castle"], ["London", "Manchester"], ["Scone", "Crumpet"], ["Gin", "Whisky"], ["Prince", "Princess"], ["Double-decker bus", "Black cab"], ["King Arthur", "Robin Hood"], ["Thames River", "River Severn"], ["London Eye", "The Shard"], ["Cheddar cheese", "Stilton cheese"], ["Red telephone box", "Red post box"], ["Shakespeare", "Charles Dickens"], ["Oxford University", "Cambridge University"], ["Paddington Bear", "Winnie-the-Pooh"], ["Jaffa Cakes", "Digestive Biscuits"], ["Union Jack", "Flag of England"]] };
-            const TOPICS_JA = { food: [["カレー", "シチュー"], ["うどん", "そば"], ["ビール", "発泡酒"], ["りんご", "なし"], ["マカロン", "トゥンカロン"], ["寿司", "刺身"], ["コーヒー", "紅茶"], ["ステーキ", "ハンバーグ"], ["パスタ", "ピザ"], ["パンケーキ", "ワッフル"], ["チョコレート", "キャラメル"], ["チーズ", "バター"]], places: [["東京タワー", "スカイツリー"], ["ディズニーランド", "ディズニーシー"], ["金閣寺", "銀閣寺"], ["海", "川"], ["コンビニ", "スーパー"], ["山", "火山"], ["学校", "病院"], ["博物館", "美術館"], ["空港", "駅"], ["公園", "庭園"], ["図書館", "本屋"], ["カフェ", "レストラン"]], people: [["俳優", "声優"], ["サンタクロース", "トナカイ"], ["先生", "生徒"], ["王様", "大統領"], ["科学者", "発明家"], ["芸術家", "音楽家"], ["シェフ", "パティシエ"], ["スポーツ選手", "コーチ"], ["探偵", "警察官"], ["YouTuber", "配信者"], ["パイロット", "宇宙飛行士"], ["農家", "庭師"]], actions: [["ランニング", "ジョギング"], ["料理", "食事"], ["睡眠", "昼寝"], ["勉強", "仕事"], ["拍手", "手拍子"], ["歌", "ダンス"], ["読書", "執筆"], ["描画", "絵画"], ["笑う", "泣く"], ["歩く", "ハイキング"], ["押す", "引く"], ["投げる", "キャッチする"]], things: [["スマホ", "携帯電話"], ["シャンプー", "リンス"], ["パソコン", "ノートパソコン"], ["鉛筆", "シャーペン"], ["傘", "日傘"], ["椅子", "ソファ"], ["本", "雑誌"], ["鍵", "錠"], ["腕時計", "時計"], ["メガネ", "サングラス"], ["スプーン", "フォーク"], ["タオル", "毛布"]], sports: [["サッカー", "フットサル"], ["野球", "ソフトボール"], ["テニス", "バドミントン"], ["卓球", "ピンポン"], ["水泳", "飛び込み"], ["スキー", "スノーボード"], ["バスケットボール", "バレーボール"], ["柔道", "空手"], ["ゴルフ", "ボウリング"], ["ボクシング", "レスリング"], ["スケートボード", "サーフィン"], ["アーチェリー", "ダーツ"]], entertainment: [["映画", "ドラマ"], ["漫画", "アニメ"], ["演劇", "ミュージカル"], ["YouTube", "TikTok"], ["コンサート", "フェス"], ["喜劇", "悲劇"], ["ラジオ", "ポッドキャスト"], ["サーカス", "マジックショー"], ["バレエ", "オペラ"], ["テレビゲーム", "アーケードゲーム"], ["小説", "詩"], ["彫刻", "絵画"]], animals: [["犬", "猫"], ["ライオン", "トラ"], ["イルカ", "クジラ"], ["ハムスター", "モルモット"], ["馬", "シマウマ"], ["ニワトリ", "アヒル"], ["ヘビ", "トカゲ"], ["蝶", "蛾"], ["クモ", "サソリ"], ["うさぎ", "野うさぎ"], ["ペンギン", "ダチョウ"], ["カエル", "ヒキガエル"]], nature: [["太陽", "月"], ["山", "丘"], ["春", "秋"], ["雷", "稲妻"], ["雲", "霧"], ["雨", "雪"], ["風", "そよ風"], ["星", "惑星"], ["森", "ジャングル"], ["砂漠", "オアシス"], ["川", "湖"], ["火山", "間欠泉"]], tech: [["AI", "ロボット"], ["インターネット", "イントラネット"], ["VR", "AR"], ["プログラミング", "コーディング"], ["ドローン", "ヘリコプター"], ["Eメール", "手紙"], ["ヘッドホン", "イヤホン"], ["カメラ", "ビデオカメラ"], ["プリンター", "スキャナー"], ["タブレット", "電子書籍リーダー"], ["マウス", "キーボード"], ["バッテリー", "充電器"]], fantasy: [["魔法使い", "魔女"], ["ドラゴン", "ワイバーン"], ["エルフ", "ドワーフ"], ["勇者", "魔王"], ["幽霊", "ゾンビ"], ["天使", "悪魔"], ["ユニコーン", "ペガサス"], ["吸血鬼", "狼男"], ["人魚", "セイレーン"], ["妖精", "ゴブリン"], ["フェニックス", "グリフィン"], ["ポーション", "呪文"]], games: [["マリオ", "ルイージ"], ["ファイナルファンタジー", "ドラゴンクエスト"], ["パズル", "クイズ"], ["ボードゲーム", "カードゲーム"], ["ポケモン", "デジモン"], ["マインクラフト", "ロブロックス"], ["チェス", "将棋"], ["鬼ごっこ", "かくれんぼ"], ["ポーカー", "ブラックジャック"], ["ビリヤード", "ダーツ"], ["モノポリー", "スクラブル"], ["テトリス", "パックマン"]], history: [["ローマ", "ギリシャ"], ["騎士", "侍"], ["ピラミッド", "スフィンクス"], ["第一次世界大戦", "第二次世界大戦"], ["ルネサンス", "産業革命"], ["城", "要塞"], ["バイキング", "海賊"], ["恐竜", "マンモス"], ["王", "皇帝"], ["革命", "反乱"], ["ナポレオン", "カエサル"], ["クレオパトラ", "ジャンヌ・ダルク"]], jobs: [["医者", "看護師"], ["警察官", "消防士"], ["パン屋", "パティシエ"], ["パイロット", "客室乗務員"], ["弁護士", "検察官"], ["作家", "ジャーナリスト"], ["デザイナー", "建築家"], ["農家", "漁師"], ["歌手", "ダンサー"], ["エンジニア", "整備士"], ["写真家", "ビデオグラファー"], ["司書", "学芸員"]], colors: [["赤", "ピンク"], ["黒", "紺"], ["金", "銀"], ["オレンジ", "茶色"], ["緑", "黄緑"], ["青", "水色"], ["紫", "ラベンダー"], ["白", "アイボリー"], ["灰色", "チャコール"], ["ベージュ", "クリーム色"], ["ターコイズ", "ティール"], ["マゼンタ", "フューシャ"]], uk: [["ビッグ・ベン", "ロンドン塔"], ["バッキンガム宮殿", "ウィンザー城"], ["サッカー", "ラグビー"], ["フィッシュ・アンド・チップス", "シェパーズパイ"], ["ビートルズ", "ローリング・ストーンズ"], ["シャーロック・ホームズ", "ジェームズ・ボンド"], ["紅茶", "アフタヌーンティー"], ["イングランド", "スコットランド"], ["庶民院", "貴族院"], ["ハリー・ポッター", "指輪物語"], ["クイーン", "オアシス"], ["ウィンブルドン", "全英オープン"], ["ストーンヘンジ", "ハドリアヌスの長城"], ["大英博物館", "ナショナル・ギャラリー"], ["タワーブリッジ", "ロンドン橋"], ["エディンバラ城", "カーディフ城"], ["ロンドン", "マンチェスター"], ["スコーン", "クランペット"], ["ジン", "ウィスキー"], ["王子", "王女"], ["二階建てバス", "ブラックキャブ"], ["アーサー王", "ロビン・フッド"], ["テムズ川", "セヴァーン川"], ["ロンドン・アイ", "ザ・シャード"], ["チェダーチーズ", "スティルトンチーズ"], ["赤い電話ボックス", "赤い郵便ポスト"], ["シェイクスピア", "チャールズ・ディケンズ"], ["オックスフォード大学", "ケンブリッジ大学"], ["パディントン", "くまのプーさん"], ["ジャファケーキ", "ダイジェスティブビスケット"], ["ユニオンジャック", "イングランドの旗"]] };
+            const TOPICS_JA = { food: [["カレー", "シチュー"], ["うどん", "そば"], ["ビール", "発泡酒"], ["りんご", "なし"], ["マカロン", "トゥンカロン"], ["寿司", "刺身"], ["コーヒー", "紅茶"], ["ステーキ", "ハンバーグ"], ["パスタ", "ピザ"], ["パンケーキ", "ワッフル"], ["チョコレート", "キャラメル"], ["チーズ", "バター"]], places: [["東京タワー", "スカイツリー"], ["ディズニーランド", "ディズニーシー"], ["金閣寺", "銀閣寺"], ["海", "川"], ["コンビニ", "スーパー"], ["山", "火山"], ["学校", "病院"], ["博物館", "美術館"], ["空港", "駅"], ["公園", "庭園"], ["図書館", "本屋"], ["カフェ", "レストラン"]], people: [["俳優", "声優"], ["サンタクロース", "トナカイ"], ["先生", "生徒"], ["王様", "大統領"], ["科学者", "発明家"], ["芸術家", "音楽家"], ["シェフ", "パティシエ"], ["スポーツ選手", "コーチ"], ["探偵", "警察官"], ["YouTuber", "配信者"], ["パイロット", "宇宙飛行士"], ["農家", "庭師"]], actions: [["ランニング", "ジョギング"], ["料理", "食事"], ["睡眠", "昼寝"], ["勉強", "仕事"], ["拍手", "手拍子"], ["歌", "ダンス"], ["読書", "執筆"], ["描画", "絵画"], ["笑う", "泣く"], ["歩く", "ハイキング"], ["押す", "引く"], ["投げる", "キャッチする"]], things: [["スマホ", "携帯電話"], ["シャンプー", "リンス"], ["パソコン", "ノートパソコン"], ["鉛筆", "シャーペン"], ["傘", "日傘"], ["椅子", "ソファ"], ["本", "雑誌"], ["鍵", "錠"], ["腕時計", "時計"], ["メガネ", "サングラス"], ["スプーン", "フォーク"], ["タオル", "毛布"]], sports: [["サッカー", "フットサル"], ["野球", "ソフトボール"], ["テニス", "バドミントン"], ["卓球", "ピンポン"], ["水泳", "飛び込み"], ["スキー", "スノーボード"], ["バスケットボール", "バレーボール"], ["柔道", "空手"], ["ゴルフ", "ボウリング"], ["ボクシング", "レスリング"], ["スケートボード", "サーフィン"], ["アーチェリー", "ダーツ"]], entertainment: [["映画", "ドラマ"], ["漫画", "アニメ"], ["演劇", "ミュージカル"], ["YouTube", "TikTok"], ["コンサート", "フェス"], ["喜劇", "悲劇"], ["ラジオ", "ポッドキャスト"], ["サーカス", "マジックショー"], ["バレエ", "オペラ"], ["テレビゲーム", "アーケードゲーム"], ["小説", "詩"], ["彫刻", "絵画"]], animals: [["犬", "猫"], ["ライオン", "トラ"], ["イルカ", "クジラ"], ["ハムスター", "モルモット"], ["馬", "シマウマ"], ["ニワトリ", "アヒル"], ["ヘビ", "トカゲ"], ["蝶", "蛾"], ["クモ", "サソリ"], ["うさぎ", "野うさぎ"], ["ペンギン", "ダチョウ"], ["カエル", "ヒキガエル"]], nature: [["太陽", "月"], ["山", "丘"], ["春", "秋"], ["雷", "稲妻"], ["雲", "霧"], ["雨", "雪"], ["風", "そよ風"], ["星", "惑星"], ["森", "ジャングル"], ["砂漠", "オアシス"], ["川", "湖"], ["火山", "間欠泉"]], tech: [["AI", "ロボット"], ["インターネット", "イントラネット"], ["VR", "AR"], ["プログラミング", "コーディング"], ["ドローン", "ヘリコプター"], ["Eメール", "手紙"], ["ヘッドホン", "イヤホン"], ["カメラ", "ビデオカメラ"], ["プリンター", "スキャナー"], ["タブレット", "電子書籍リーダー"], ["マウス", "キーボード"], ["バッテリー", "充電器"]], fantasy: [["魔法使い", "魔女"], ["ドラゴン", "ワイバーン"], ["エルフ", "ドワーフ"], ["勇者", "魔王"], ["幽霊", "ゾンビ"], ["天使", "悪魔"], ["ユニコーン", "ペガサス"], ["吸血鬼", "狼男"], ["人魚", "セイレーン"], ["妖精", "ゴブリン"], ["フェニックス", "グリフィン"], ["ポーション", "呪文"]], games: [["マリオ", "ルイージ"], ["ファイナルファンタジー", "ドラゴンクエスト"], ["パズル", "クイズ"], ["ボードゲーム", "カードゲーム"], ["ポケモン", "デジモン"], ["マインクラフト", "ロブロックス"], ["チェス", "将棋"], ["鬼ごっこ", "かくれんぼ"], ["ポーカー", "ブラックジャック"], ["ビリヤード", "ダーツ"], ["モノポリー", "スクラブル"], ["テトリス", "パックマン"]], history: [["ローマ", "ギリシャ"], ["騎士", "侍"], ["ピラミッド", "スフィンクス"], ["第一次世界大戦", "第二次世界大戦"], ["ルネサンス", "産業革命"], ["城", "要塞"], ["バイキング", "海賊"], ["恐竜", "マンモス"], ["王", "皇帝"], ["革命", "反乱"], ["ナポレオン", "カエサル"], ["クレオパトラ", "ジャンヌ・ダルク"]], jobs: [["医者", "看護師"], ["警察官", "消防士"], ["パン屋", "パティシエ"], ["パイロット", "客室乗務員"], ["弁護士", "検察官"], ["作家", "ジャーナリスト"], ["デザイナー", "建築家"], ["農家", "漁師"], ["歌手", "ダンサー"], ["エンジニア", "整備士"], ["写真家", "ビデオグラファー"], ["司書", "学芸員"]], colors: [["赤", "ピンク"], ["黒", "紺"], ["金", "銀"], ["オレンジ", "茶色"], ["緑", "黄緑"], ["青", "水色"], ["紫", "ラベンダー"], ["白", "アイボリー"], ["灰色", "チャコール"], ["ベージュ", "クリーム色"], ["ターコイズ", "ティール"], ["マゼンタ", "フューシャ"]], uk: [["ビッグ・ベン", "ロンドン塔"], ["バッキンガム宮殿", "ウィンザー城"], ["サッカー", "ラグビー"], ["フィッシュ・アンド・チップス", "シェパーズパイ"], ["ビートルズ", "ローリング・ストーンズ"], ["シャーロック・ホームズ", "ジェームズ・ボンド"], ["紅茶", "アフタヌーンティー"], ["イングランド", "スコットランド"], ["庶民院", "貴族院"], ["ハリー・ポッター", "指輪物語"], ["クイーン", "オアシス"], ["ウィンブルドン", "全英オープン"], ["ストーンヘンジ", "ハドリアヌスの長城"], ["大英博物館", "ナショナル・ギャラリー"], ["タワーブリッジ", "ロンドン橋"], ["エディンバラ城", "カーディフ城"], ["ロンドン", "マンチェスター"], ["スコーン", "クランペット"], ["ジン", "ウィスキー"], ["王子", "王女"], ["二階建てバス", "ブラックキャブ"], ["アーサー王", "ロビン・フッド"], ["テムズ川", "セヴァーン川"], ["ロンドン・アイ", "ザ・シャード"], ["チェダーチーズ", "スティルトンチーズ"], ["赤い電話ボックス", "赤い郵便ポスト"], ["シェイクスピア", "チャールズ・ディケンズ"], ["オックスフォード大学", "ケンブリッジ大学"], ["パディントン", "くまのプーさん"], ["ジャファケーキ", "ダイジェストビスケット"], ["ユニオンジャック", "イングランドの旗"]] };
             const TOPIC_NAMES_EN = { food: "Food & Drink", places: "Places", people: "People", actions: "Actions", things: "Things", sports: "Sports", entertainment: "Entertainment", animals: "Animals", nature: "Nature", tech: "Technology", fantasy: "Fantasy", games: "Games", history: "History", jobs: "Jobs", colors: "Colors", uk: "About the UK" };
             const TOPIC_NAMES_JA = { food: "食べ物・飲み物", places: "場所", people: "人物", actions: "行動", things: "モノ", sports: "スポーツ", entertainment: "エンタメ", animals: "動物", nature: "自然", tech: "テクノロジー", fantasy: "ファンタジー", games: "ゲーム", history: "歴史", jobs: "職業", colors: "色", uk: "イギリス関連" };
 
@@ -115,57 +184,62 @@
                     <div class="screen">
                         <div class="card text-center">
                             <h1 class="text-4xl font-bold text-violet-400">Word Wolf</h1>
-                            <p class="text-gray-400 mt-2 mb-8">The Ultimate Word Finding Game</p>
+                            <p class="text-gray-400 mt-2 mb-8">究極の単語探しゲーム</p>
                             <div class="space-y-4">
-                                <input type="text" id="player-name-input" class="form-input text-center" placeholder="Enter your name" value="${localState.playerName}">
-                                <button id="create-room-btn" class="btn btn-primary w-full">Create Room</button>
+                                <input type="text" id="player-name-input" class="form-input text-center" placeholder="名前を入力" value="${localState.playerName}">
+                                <button id="create-room-btn" class="btn btn-primary w-full">ルームを作成</button>
                                 <div class="flex items-center gap-2">
-                                    <input type="text" id="join-room-id-input" class="form-input text-center" placeholder="Room ID">
-                                    <button id="join-room-btn" class="btn btn-secondary">Join</button>
+                                    <input type="text" id="join-room-id-input" class="form-input text-center" placeholder="ルームID">
+                                    <button id="join-room-btn" class="btn btn-secondary">参加</button>
                                 </div>
                             </div>
-                            <button id="show-rules-btn" class="text-violet-400 mt-8">How to Play & Credits</button>
+                            <div class="mt-6 text-xs text-gray-500 text-left p-2 border border-gray-700 rounded-md">
+                                <p class="font-bold mb-1">あなたのユーザーID:</p>
+                                <p class="font-mono break-all" id="user-id-display">Loading...</p>
+                            </div>
+                            <button id="show-rules-btn" class="text-violet-400 mt-8">遊び方とクレジット</button>
+                        </div>
+                    </div>
+                `;
+            }
+            
+            function getRulesAndCreditsHTML() {
+               return `
+                    <div class="screen">
+                        <div class="card">
+                            <div class="text-center mb-6"><h1 class="text-3xl font-bold">ワードウルフ</h1></div>
+                            <div class="space-y-6">
+                                <div>
+                                    <h2 class="text-xl font-bold mb-2 text-violet-400">ワードウルフとは？</h2>
+                                    <p class="text-gray-300">他の人（市民）とは違うお題を与えられた「ウルフ」を探し出すゲームです。話し合いで、会話が噛み合わない人を見つけ出しましょう！</p>
+                                </div>
+                                <div>
+                                    <h2 class="text-xl font-bold mb-2 text-violet-400">ゲームの流れ</h2>
+                                    <ol class="list-decimal rules-list space-y-2 text-gray-300">
+                                        <li><b>準備：</b>ホストが待機室でゲームのルールを設定します。</li>
+                                        <li><b>お題確認：</b>自分に割り当てられた単語をこっそり確認します。自分の役職は知らされません！</li>
+                                        <li><b>トークタイム：</b>お題について話し合い、ウルフを探します。</li>
+                                        <li><b>質問タイム：</b>一人ずつ、他のプレイヤーに「はい」か「いいえ」で答えられる質問をします。</li>
+                                        <li><b>最終トークタイム：</b>投票前の最後の話し合いの時間です。</li>
+                                        <li><b>投票：</b>プレイヤーを一人選び、投票を確定します。</li>
+                                        <li><b>結果：</b>追放されたプレイヤーと、ゲームが終了するかどうかを確認します！</li>
+                                    </ol>
+                                </div>
+                                <div>
+                                    <h2 class="text-xl font-bold mb-2 text-violet-400">クレジット</h2>
+                                    <div class="text-gray-400 text-sm text-center space-y-1">
+                                        <p>ゲームディレクター: Kei</p>
+                                        <p>開発: KY</p>
+                                        <p>開発サポート: Gemini</p>
+                                    </div>
+                                </div>
+                                <button id="back-to-home-btn" class="btn btn-primary w-full mt-4">戻る</button>
+                            </div>
                         </div>
                     </div>
                 `;
             }
 
-            function getRulesAndCreditsHTML() {
-                 return `
-                    <div class="screen">
-                        <div class="card">
-                            <div class="text-center mb-6"><h1 class="text-3xl font-bold">Word Wolf</h1></div>
-                            <div class="space-y-6">
-                                <div>
-                                    <h2 class="text-xl font-bold mb-2 text-violet-400">What is Word Wolf?</h2>
-                                    <p class="text-gray-300">It's a game to find the "wolf" who has been given a different word from everyone else (the "citizens"). Use discussion to find the person who doesn't quite fit in!</p>
-                                </div>
-                                <div>
-                                    <h2 class="text-xl font-bold mb-2 text-violet-400">Game Flow</h2>
-                                    <ol class="list-decimal rules-list space-y-2 text-gray-300">
-                                        <li><b>Setup:</b> The host sets the game rules in the waiting room.</li>
-                                        <li><b>Check Word:</b> Secretly check your assigned word. You won't be told your role!</li>
-                                        <li><b>Talk Time:</b> Discuss the topic to find the wolf.</li>
-                                        <li><b>Question Time:</b> One by one, ask another player a question that must be answered with "Yes" or "No".</li>
-                                        <li><b>Final Talk Time:</b> One last chance to discuss before the vote.</li>
-                                        <li><b>Vote:</b> Select a player and confirm your vote.</li>
-                                        <li><b>Result:</b> See who was eliminated and if the game ends!</li>
-                                    </ol>
-                                </div>
-                                <div>
-                                    <h2 class="text-xl font-bold mb-2 text-violet-400">Credits</h2>
-                                    <div class="text-gray-400 text-sm text-center space-y-1">
-                                        <p>Game Director: Kei</p>
-                                        <p>Development: KY</p>
-                                        <p>Development Support: Gemini</p>
-                                    </div>
-                                </div>
-                                <button id="back-to-home-btn" class="btn btn-primary w-full mt-4">Back</button>
-                            </div>
-                        </div>
-                    </div>
-                `;
-            }
 
             function getWaitingRoomHTML(room) {
                 const isHost = room.hostId === localState.userId;
@@ -176,15 +250,15 @@
                 return `
                     <div class="screen">
                         <div class="card text-center">
-                            <p class="text-gray-400">Room ID</p>
+                            <p class="text-gray-400">ルームID</p>
                             <div class="bg-gray-900 p-3 rounded-md font-mono text-2xl tracking-widest my-2 cursor-pointer" id="room-id-display">${room.id}</div>
                             <p id="copy-feedback" class="text-sm text-green-400 h-4"></p>
-                            <h2 class="text-xl font-bold mt-6 mb-3">Players (${Object.keys(room.players).length})</h2>
+                            <h2 class="text-xl font-bold mt-6 mb-3">プレイヤー (${Object.keys(room.players).length})</h2>
                             <div class="flex flex-wrap justify-center gap-2 mb-6">${playersHTML}</div>
                             ${isHost ? `
                                 <div class="text-left space-y-4 mt-4 border-t border-gray-700 pt-4">
                                     <div>
-                                        <label for="language" class="font-medium">Language</label>
+                                        <label for="language" class="font-medium">言語</label>
                                         <select id="language" class="form-select">
                                             <option value="en" ${room.settings.language === 'en' ? 'selected' : ''}>English</option>
                                             <option value="ja" ${room.settings.language === 'ja' ? 'selected' : ''}>日本語</option>
@@ -192,40 +266,44 @@
                                     </div>
                                     <div class="grid grid-cols-2 gap-4">
                                         <div>
-                                            <label for="wolf-count" class="font-medium">Wolf Count</label>
+                                            <label for="wolf-count" class="font-medium">ウルフの数</label>
                                             <input id="wolf-count" type="number" class="form-input" value="${room.settings.wolfCount}" min="1">
                                         </div>
                                         <div>
-                                            <label for="turn-count" class="font-medium">Rounds</label>
+                                            <label for="turn-count" class="font-medium">ラウンド数</label>
                                             <input id="turn-count" type="number" class="form-input" value="${room.settings.turnCount}" min="1" max="5">
                                         </div>
                                     </div>
                                      <div class="grid grid-cols-2 gap-4">
                                         <div>
-                                            <label for="talk-time" class="font-medium">Talk Time (sec)</label>
+                                            <label for="talk-time" class="font-medium">トーク時間 (秒)</label>
                                             <input id="talk-time" type="number" class="form-input" value="${room.settings.talkTime}" min="10">
                                         </div>
                                         <div>
-                                            <label for="final-talk-time" class="font-medium">Final Talk (sec)</label>
+                                            <label for="final-talk-time" class="font-medium">最終トーク (秒)</label>
                                             <input id="final-talk-time" type="number" class="form-input" value="${room.settings.finalTalkTime}" min="10">
                                         </div>
                                     </div>
                                     <div>
-                                        <label for="topic" class="font-medium">Topic</label>
+                                        <label for="voting-time" class="font-medium">投票時間 (秒)</label>
+                                        <input id="voting-time" type="number" class="form-input" value="${room.settings.votingTime}" min="10">
+                                    </div>
+                                    <div>
+                                        <label for="topic" class="font-medium">お題</label>
                                         <select id="topic" class="form-select">
                                             ${topicOptionsHTML}
-                                            <option value="custom" ${room.settings.topic === 'custom' ? 'selected' : ''}>Custom</option>
+                                            <option value="custom" ${room.settings.topic === 'custom' ? 'selected' : ''}>カスタム</option>
                                         </select>
                                     </div>
                                     <div id="custom-topic-area" class="${room.settings.topic === 'custom' ? '' : 'hidden'} space-y-2">
                                         <div id="custom-pairs-container">
                                             <!-- Custom pairs will be injected here -->
                                         </div>
-                                        <button id="add-pair-btn" class="btn btn-secondary w-full text-sm py-2">Add Pair</button>
+                                        <button id="add-pair-btn" class="btn btn-secondary w-full text-sm py-2">ペアを追加</button>
                                     </div>
                                 </div>
-                                <button id="start-game-btn" class="btn btn-primary w-full mt-6">Start Game</button>
-                            ` : '<p class="text-gray-400 mt-6">Waiting for the host to start the game...</p>'}
+                                <button id="start-game-btn" class="btn btn-primary w-full mt-6">ゲーム開始</button>
+                            ` : '<p class="text-gray-400 mt-6">ホストがゲームを開始するのを待っています...</p>'}
                         </div>
                     </div>
                 `;
@@ -236,9 +314,9 @@
                 return `
                     <div class="screen">
                         <div class="card text-center">
-                            <p class="text-gray-400 mt-6">Your Word is</p>
+                            <p class="text-gray-400 mt-6">あなたの単語は</p>
                             <p class="text-4xl font-bold text-violet-400 my-4">${me.word}</p>
-                            <button id="ack-word-btn" class="btn btn-primary w-full">I Understand</button>
+                            <button id="ack-word-btn" class="btn btn-primary w-full">確認しました</button>
                         </div>
                     </div>
                 `;
@@ -249,13 +327,13 @@
                     const isEliminated = p.isEliminated ? 'line-through opacity-50' : '';
                     return `<span class="p-2 rounded-full bg-gray-700 ${isEliminated}">${p.name}</span>`;
                 }).join('');
-                const title = room.gameState === 'final_talk_time' ? 'Final Talk Time' : 'Talk Time';
+                const title = room.gameState === 'final_talk_time' ? '最終トークタイム' : 'トークタイム';
                 return `
                     <div class="screen">
                         <div class="card text-center w-full max-w-2xl">
-                            <p class="text-2xl font-bold mb-4">${title} (Round ${room.currentTurn})</p>
+                            <p class="text-2xl font-bold mb-4">${title} (ラウンド ${room.currentTurn})</p>
                             <div id="timer-display" class="timer text-violet-400 mb-6">00:00</div>
-                            <p class="font-medium mb-2">Participants</p>
+                            <p class="font-medium mb-2">参加者</p>
                             <div class="flex flex-wrap justify-center gap-2">${playersHTML}</div>
                         </div>
                     </div>
@@ -270,13 +348,13 @@
                 return `
                     <div class="screen">
                         <div class="card text-center">
-                            <h2 class="text-3xl font-bold mb-4">Question Time</h2>
-                            <p class="text-gray-400 mb-6">It's <span class="font-bold text-violet-400">${questioner.name}'s</span> turn to ask a question.</p>
+                            <h2 class="text-3xl font-bold mb-4">質問タイム</h2>
+                            <p class="text-gray-400 mb-6"><span class="font-bold text-violet-400">${questioner.name}さん</span>が質問する番です。</p>
                             ${isMyTurn ? `
-                                <p class="mb-4">Ask one person a question, or skip your turn.</p>
+                                <p class="mb-4">誰か一人に質問するか、ターンをスキップしてください。</p>
                                 <div class="flex gap-4">
-                                    <button id="next-questioner-btn" class="btn btn-primary w-full">Next Questioner</button>
-                                    <button id="skip-question-btn" class="btn btn-secondary w-full">Skip</button>
+                                    <button id="next-questioner-btn" class="btn btn-primary w-full">次の質問者へ</button>
+                                    <button id="skip-question-btn" class="btn btn-secondary w-full">スキップ</button>
                                 </div>
                             ` : ''}
                         </div>
@@ -286,10 +364,12 @@
 
             function getVotingHTML(room) {
                 const me = room.players[localState.userId];
+                const isHost = room.hostId === localState.userId;
+
                 if (me.isEliminated || me.hasVoted) {
                     return `
                         <div class="screen">
-                            <div class="card text-center"><p class="text-xl">Vote complete. Waiting for others...</p></div>
+                            <div class="card text-center"><p class="text-xl">投票完了。他の人を待っています...</p></div>
                         </div>`;
                 }
                 const voteButtonsHTML = Object.values(room.players)
@@ -299,14 +379,20 @@
                 return `
                     <div class="screen">
                         <div class="card text-center">
-                            <h2 class="text-3xl font-bold mb-4">Vote Time (Round ${room.currentTurn})</h2>
-                            <p class="text-gray-400 mb-6">Who do you think is the Wolf?</p>
+                            <h2 class="text-3xl font-bold mb-4">投票タイム (ラウンド ${room.currentTurn})</h2>
+                            <div id="timer-display" class="timer text-violet-400 mb-4">00:00</div>
+                            <p class="text-gray-400 mb-6">誰がウルフだと思いますか？</p>
                             <div id="vote-buttons-container" class="grid grid-cols-2 sm:grid-cols-3 gap-3">${voteButtonsHTML}</div>
+                            ${isHost ? `
+                                <div class="mt-6 text-lg border-t border-gray-700 pt-4">
+                                    投票済み: <span id="voted-count">0</span> / <span id="total-voters">0</span>
+                                </div>
+                            ` : ''}
                             <div id="vote-confirmation-area" class="hidden mt-6 space-y-4 border-t border-gray-700 pt-4">
                                 <p id="vote-confirm-text" class="text-lg"></p>
                                 <div class="flex gap-4">
-                                    <button id="confirm-vote-btn" class="btn btn-primary w-full">Confirm</button>
-                                    <button id="cancel-vote-btn" class="btn btn-secondary w-full">Cancel</button>
+                                    <button id="confirm-vote-btn" class="btn btn-primary w-full">確定</button>
+                                    <button id="cancel-vote-btn" class="btn btn-secondary w-full">キャンセル</button>
                                 </div>
                             </div>
                         </div>
@@ -316,21 +402,22 @@
 
             function getResultsHTML(room) {
                 const eliminatedPlayer = Object.values(room.players).find(p => p.id === room.lastEliminatedId);
-                let resultText = "The vote was a tie. No one was eliminated.";
+                let resultText = "投票が同数だったため、誰も追放されませんでした。";
                 let roleRevealHTML = '';
                 if (eliminatedPlayer) {
-                    resultText = `${eliminatedPlayer.name} has been voted out.`;
+                    resultText = `${eliminatedPlayer.name} が追放されました。`;
                     const roleColor = eliminatedPlayer.role === 'wolf' ? 'text-red-500' : 'text-blue-500';
-                    roleRevealHTML = `<p class="text-xl">${eliminatedPlayer.name} was a <span class="font-bold ${roleColor}">${eliminatedPlayer.role}</span>.</p>`;
+                    const roleText = eliminatedPlayer.role === 'wolf' ? 'ウルフ' : '市民';
+                    roleRevealHTML = `<p class="text-xl">${eliminatedPlayer.name} は <span class="font-bold ${roleColor}">${roleText}</span> でした。</p>`;
                 }
                 const isHost = room.hostId === localState.userId;
                 return `
                     <div class="screen">
                         <div class="card text-center">
-                            <h2 class="text-3xl font-bold mb-4">Vote Results</h2>
+                            <h2 class="text-3xl font-bold mb-4">投票結果</h2>
                             <p class="text-xl mb-6">${resultText}</p>
                             ${roleRevealHTML}
-                            ${isHost ? '<button id="next-round-btn" class="btn btn-primary w-full mt-6">Continue</button>' : '<p class="text-gray-400 mt-6">Waiting for the host to continue...</p>'}
+                            ${isHost ? '<button id="next-round-btn" class="btn btn-primary w-full mt-6">続ける</button>' : '<p class="text-gray-400 mt-6">ホストが続けるのを待っています...</p>'}
                         </div>
                     </div>
                 `;
@@ -343,28 +430,29 @@
                 return `
                     <div class="screen">
                         <div class="card text-center">
-                            <h2 class="text-3xl font-bold mb-2">Wolf's Final Guess!</h2>
-                            <p class="text-gray-400 mb-6">${guessingWolf.name}, guess the Citizen's word for a comeback victory!</p>
+                            <h2 class="text-3xl font-bold mb-2">ウルフの最終推測！</h2>
+                            <p class="text-gray-400 mb-6">${guessingWolf.name}さん、市民の単語を当てて逆転勝利を目指しましょう！</p>
                             ${isMyTurn ? `
-                                <input id="wolf-guess-input" type="text" class="form-input text-center mb-4" placeholder="Enter Citizen's word">
-                                <button id="submit-guess-btn" class="btn btn-primary w-full">Submit Guess</button>
-                            ` : `<p>Waiting for ${guessingWolf.name} to guess...</p>`}
+                                <input id="wolf-guess-input" type="text" class="form-input text-center mb-4" placeholder="市民の単語を入力">
+                                <button id="submit-guess-btn" class="btn btn-primary w-full">推測を送信</button>
+                            ` : `<p>${guessingWolf.name}が推測するのを待っています...</p>`}
                         </div>
                     </div>
                 `;
             }
 
             function getEndGameHTML(room) {
+                const winnerText = room.winner === 'citizens' ? '市民チームの勝利！' : 'ウルフチームの勝利！';
                 return `
                     <div class="screen">
                         <div class="card text-center">
-                            <h2 class="text-4xl font-bold ${room.winner === 'citizens' ? 'text-blue-500' : 'text-red-500'}">${room.winner.charAt(0).toUpperCase() + room.winner.slice(1)} Win!</h2>
-                            <p class="my-6">The words were:</p>
+                            <h2 class="text-4xl font-bold ${room.winner === 'citizens' ? 'text-blue-500' : 'text-red-500'}">${winnerText}</h2>
+                            <p class="my-6">今回のお題は：</p>
                             <div class="text-lg bg-gray-900 p-4 rounded-lg">
-                                <p>Citizen: <span class="font-bold">${room.words.citizen}</span></p>
-                                <p>Wolf: <span class="font-bold">${room.words.wolf}</span></p>
+                                <p>市民: <span class="font-bold">${room.words.citizen}</span></p>
+                                <p>ウルフ: <span class="font-bold">${room.words.wolf}</span></p>
                             </div>
-                            ${room.hostId === localState.userId ? '<button id="play-again-btn" class="btn btn-primary w-full mt-6">Play Again</button>' : '<p class="text-gray-400 mt-6">Waiting for the host...</p>'}
+                            ${room.hostId === localState.userId ? '<button id="play-again-btn" class="btn btn-primary w-full mt-6">もう一度プレイ</button>' : '<p class="text-gray-400 mt-6">ホストを待っています...</p>'}
                         </div>
                     </div>
                 `;
@@ -373,16 +461,17 @@
             // --- Game Logic ---
             
             async function startGame(room) {
-                const roomRef = doc(db, "rooms", room.id);
+                const roomRef = getRoomRef(room.id);
                 const players = room.players;
                 const settings = room.settings;
                 const playerIds = Object.keys(players);
-                const wolfCount = Math.max(1, Math.min(settings.wolfCount, playerIds.length - 1));
-
+                
                 if (playerIds.length < 3) {
-                    alert("You need at least 3 players to start.");
+                    showMessage("ゲームを開始するには最低3人のプレイヤーが必要です。", true);
                     return;
                 }
+                
+                const wolfCount = Math.max(1, Math.min(settings.wolfCount, playerIds.length - 1));
 
                 let roles = Array(playerIds.length).fill('citizen');
                 for(let i = 0; i < wolfCount; i++) roles[i] = 'wolf';
@@ -400,7 +489,7 @@
                     });
 
                     if (customPairs.length === 0) {
-                        alert("Please add at least one valid custom word pair.");
+                        showMessage("有効なカスタム単語ペアを少なくとも1つ追加してください。", true);
                         return;
                     }
                     wordPair = customPairs[Math.floor(Math.random() * customPairs.length)];
@@ -415,6 +504,7 @@
                 playerIds.forEach((id, index) => {
                     updatedPlayers[id].role = roles[index];
                     updatedPlayers[id].word = roles[index] === 'wolf' ? wordB : wordA;
+                    updatedPlayers[id].acknowledged = false; // Reset acknowledgement
                 });
                 
                 const questionerOrder = [...playerIds].sort(() => Math.random() - 0.5);
@@ -429,26 +519,61 @@
                 });
             }
 
-            function handleTimer(room) {
+            function handlePhaseTimer(room) {
                 if (localState.timerInterval) clearInterval(localState.timerInterval);
                 const timerDisplay = document.getElementById('timer-display');
                 if (!timerDisplay) return;
 
-                const nextState = room.gameState === 'talk_time' ? 'question_time' : 'voting';
-                const timeDuration = room.gameState === 'talk_time' ? room.settings.talkTime : room.settings.finalTalkTime;
+                // For host view in voting
+                const votedCountEl = document.getElementById('voted-count');
+                const totalVotersEl = document.getElementById('total-voters');
 
                 localState.timerInterval = setInterval(async () => {
-                    if (!room.phaseEndTime) return;
+                    if (!room.phaseEndTime) {
+                        clearInterval(localState.timerInterval);
+                        return;
+                    }
+
+                    // Update timer display
                     const serverTime = room.phaseEndTime.toMillis();
                     const remaining = Math.max(0, Math.round((serverTime - Date.now()) / 1000));
                     const minutes = String(Math.floor(remaining / 60)).padStart(2, '0');
                     const seconds = String(remaining % 60).padStart(2, '0');
-                    timerDisplay.textContent = `${minutes}:${seconds}`;
+                    if (timerDisplay) {
+                        timerDisplay.textContent = `${minutes}:${seconds}`;
+                    }
 
+                    // Update host's vote count display if in voting phase
+                    if (room.gameState === 'voting' && localState.isHost && votedCountEl) {
+                        const votedCount = Object.values(room.players).filter(p => !p.isEliminated && p.hasVoted).length;
+                        const totalVoters = Object.values(room.players).filter(p => !p.isEliminated).length;
+                        votedCountEl.textContent = votedCount;
+                        totalVotersEl.textContent = totalVoters;
+                    }
+
+                    // Host handles phase end
                     if (remaining <= 0 && localState.isHost) {
                         clearInterval(localState.timerInterval);
-                        const roomRef = doc(db, "rooms", room.id);
-                        await updateDoc(roomRef, { gameState: nextState });
+                        const roomRef = getRoomRef(room.id);
+
+                        switch (room.gameState) {
+                            case 'talk_time':
+                                await updateDoc(roomRef, { gameState: 'question_time' });
+                                break;
+                            case 'final_talk_time':
+                                const votingTime = room.settings.votingTime || 30;
+                                const phaseEndTime = new Date(Date.now() + votingTime * 1000);
+                                await updateDoc(roomRef, { gameState: 'voting', phaseEndTime });
+                                break;
+                            case 'voting':
+                                await runTransaction(db, async (transaction) => {
+                                    const roomSnap = await transaction.get(roomRef);
+                                    if (!roomSnap.exists() || roomSnap.data().gameState !== 'voting') return;
+                                    const currentRoom = roomSnap.data();
+                                    tallyVotesAndProceed(currentRoom.players, roomRef, transaction, currentRoom.settings);
+                                });
+                                break;
+                        }
                     }
                 }, 500);
             }
@@ -457,17 +582,18 @@
             
             function attachRoomListener(roomId) {
                 if (localState.roomUnsubscribe) localState.roomUnsubscribe();
-                localState.roomUnsubscribe = onSnapshot(doc(db, "rooms", roomId), (doc) => {
+                const roomRef = getRoomRef(roomId);
+                localState.roomUnsubscribe = onSnapshot(roomRef, (doc) => {
                     const roomData = doc.data();
                     if (!roomData) {
                         if(localState.roomUnsubscribe) localState.roomUnsubscribe();
-                        alert("The host has closed the room.");
-                        window.location.href = '/';
+                        showMessage("ホストがルームを閉じました。");
+                        setTimeout(() => window.location.href = '/', 3000);
                         return;
                     }
                     
                     localState.isHost = roomData.hostId === localState.userId;
-                    if(localState.timerInterval && roomData.gameState !== 'talk_time' && roomData.gameState !== 'final_talk_time') {
+                    if(localState.timerInterval && !['talk_time', 'final_talk_time', 'voting'].includes(roomData.gameState)) {
                         clearInterval(localState.timerInterval);
                     }
 
@@ -479,7 +605,7 @@
                         case 'role_assignment':
                             const me = roomData.players[localState.userId];
                             if (me.acknowledged) {
-                                render(`<div class="screen"><div class="card text-center"><p class="text-xl">Waiting for others to confirm...</p></div></div>`);
+                                render(`<div class="screen"><div class="card text-center"><p class="text-xl">他のプレイヤーの確認を待っています...</p></div></div>`);
                             } else {
                                 render(getRoleAssignmentHTML(roomData));
                                 addRoleAssignmentListeners(roomData);
@@ -488,7 +614,7 @@
                         case 'talk_time':
                         case 'final_talk_time':
                             render(getTalkTimeHTML(roomData));
-                            handleTimer(roomData);
+                            handlePhaseTimer(roomData);
                             break;
                         case 'question_time':
                             render(getQuestionTimeHTML(roomData));
@@ -497,6 +623,7 @@
                         case 'voting':
                             render(getVotingHTML(roomData));
                             addVotingListeners(roomData);
+                            handlePhaseTimer(roomData);
                             break;
                         case 'results':
                             render(getResultsHTML(roomData));
@@ -523,6 +650,7 @@
                     document.getElementById('back-to-home-btn').addEventListener('click', () => {
                         render(getHomeScreenHTML());
                         addHomeListeners();
+                        document.getElementById('user-id-display').textContent = localState.userId;
                     });
                 });
             }
@@ -532,24 +660,25 @@
                     document.getElementById('start-game-btn').addEventListener('click', () => startGame(room));
                     
                     const updateSettings = async () => {
-                        const roomRef = doc(db, "rooms", room.id);
+                        const roomRef = getRoomRef(room.id);
                         await updateDoc(roomRef, {
                             "settings.wolfCount": parseInt(document.getElementById('wolf-count').value) || 1,
-                            "settings.turnCount": parseInt(document.getElementById('turn-count').value) || 3,
+                            "settings.turnCount": parseInt(document.getElementById('turn-count').value) || 1,
                             "settings.talkTime": parseInt(document.getElementById('talk-time').value) || 180,
                             "settings.finalTalkTime": parseInt(document.getElementById('final-talk-time').value) || 60,
+                            "settings.votingTime": parseInt(document.getElementById('voting-time').value) || 30,
                             "settings.topic": document.getElementById('topic').value,
                             "settings.language": document.getElementById('language').value,
                         });
                     };
                     
-                    ['language', 'wolf-count', 'turn-count', 'talk-time', 'final-talk-time'].forEach(id => {
-                        document.getElementById(id).addEventListener('change', updateSettings);
+                    ['language', 'wolf-count', 'turn-count', 'talk-time', 'final-talk-time', 'voting-time', 'topic'].forEach(id => {
+                        const el = document.getElementById(id);
+                        if (el) el.addEventListener('change', updateSettings);
                     });
                     
                     document.getElementById('topic').addEventListener('change', () => {
                         document.getElementById('custom-topic-area').classList.toggle('hidden', document.getElementById('topic').value !== 'custom');
-                        updateSettings();
                     });
 
                     document.getElementById('add-pair-btn').addEventListener('click', () => {
@@ -557,8 +686,8 @@
                         const pairDiv = document.createElement('div');
                         pairDiv.className = 'custom-pair flex items-center gap-2 mt-2';
                         pairDiv.innerHTML = `
-                            <input type="text" class="form-input word1" placeholder="Word 1">
-                            <input type="text" class="form-input word2" placeholder="Word 2">
+                            <input type="text" class="form-input word1" placeholder="単語1">
+                            <input type="text" class="form-input word2" placeholder="単語2">
                             <button class="btn btn-secondary p-2 remove-pair-btn">X</button>
                         `;
                         container.appendChild(pairDiv);
@@ -571,7 +700,7 @@
                 }
                 document.getElementById('room-id-display').addEventListener('click', (e) => {
                     navigator.clipboard.writeText(room.id);
-                    document.getElementById('copy-feedback').textContent = 'Copied!';
+                    document.getElementById('copy-feedback').textContent = 'コピーしました！';
                     setTimeout(() => { 
                         if(document.getElementById('copy-feedback')) document.getElementById('copy-feedback').textContent = '' 
                     }, 2000);
@@ -579,21 +708,28 @@
             }
             
             async function handleAcknowledgement(room) {
-                const roomRef = doc(db, "rooms", room.id);
-                await updateDoc(roomRef, { [`players.${localState.userId}.acknowledged`]: true });
+                const roomRef = getRoomRef(room.id);
+                
+                await runTransaction(db, async (transaction) => {
+                    const roomSnap = await transaction.get(roomRef);
+                    if (!roomSnap.exists()) { throw "Room does not exist!"; }
+                    
+                    const currentRoom = roomSnap.data();
+                    const updatedPlayers = { ...currentRoom.players };
+                    updatedPlayers[localState.userId].acknowledged = true;
+                    
+                    transaction.update(roomRef, { players: updatedPlayers });
 
-                const updatedRoomSnap = await getDoc(roomRef);
-                const updatedRoom = updatedRoomSnap.data();
-
-                const allAckd = Object.values(updatedRoom.players).every(p => p.acknowledged);
-                if (allAckd) {
-                    const talkTimeInSeconds = updatedRoom.settings.talkTime || 180;
-                    const phaseEndTime = new Date(Date.now() + talkTimeInSeconds * 1000);
-                    await updateDoc(roomRef, { 
-                        gameState: 'talk_time',
-                        phaseEndTime: phaseEndTime
-                    });
-                }
+                    const allAckd = Object.values(updatedPlayers).every(p => p.acknowledged);
+                    if (allAckd && localState.isHost) {
+                        const talkTimeInSeconds = currentRoom.settings.talkTime || 180;
+                        const phaseEndTime = new Date(Date.now() + talkTimeInSeconds * 1000);
+                        transaction.update(roomRef, { 
+                            gameState: 'talk_time',
+                            phaseEndTime: phaseEndTime
+                        });
+                    }
+                });
             }
 
             function addRoleAssignmentListeners(room) {
@@ -601,7 +737,7 @@
             }
 
             async function handleQuestionTurn(room) {
-                const roomRef = doc(db, "rooms", room.id);
+                const roomRef = getRoomRef(room.id);
                 const nextIndex = room.currentQuestionerIndex + 1;
                 
                 if (nextIndex >= room.questionerOrder.length) {
@@ -622,33 +758,34 @@
             }
 
             async function handleVote(votedId, room) {
-                const roomRef = doc(db, "rooms", room.id);
+                const roomRef = getRoomRef(room.id);
                 
                 await runTransaction(db, async (transaction) => {
                     const roomSnap = await transaction.get(roomRef);
-                    if (!roomSnap.exists()) { throw "Room does not exist!"; }
+                    if (!roomSnap.exists() || roomSnap.data().gameState !== 'voting') { return; }
                     
                     const currentRoom = roomSnap.data();
-                    const currentVotes = currentRoom.players[votedId].votes || 0;
-                    
-                    const updates = {};
-                    updates[`players.${localState.userId}.hasVoted`] = true;
-                    updates[`players.${votedId}.votes`] = currentVotes + 1;
-                    transaction.update(roomRef, updates);
-
                     const updatedPlayers = { ...currentRoom.players };
+                    
+                    if (updatedPlayers[localState.userId].hasVoted) return;
+
+                    const currentVotes = updatedPlayers[votedId].votes || 0;
                     updatedPlayers[localState.userId].hasVoted = true;
+                    updatedPlayers[votedId].votes = currentVotes + 1;
+                    
+                    transaction.update(roomRef, { players: updatedPlayers });
 
                     const allVoted = Object.values(updatedPlayers).filter(p => !p.isEliminated).every(p => p.hasVoted);
                     if (allVoted) {
-                        tallyVotesAndProceed(updatedPlayers, roomRef, transaction);
+                        tallyVotesAndProceed(updatedPlayers, roomRef, transaction, currentRoom.settings);
                     }
                 });
             }
 
             function addVotingListeners(room) {
+                if (room.players[localState.userId].isEliminated || room.players[localState.userId].hasVoted) return;
+                
                 let selectedVoteId = null;
-                const voteButtonsContainer = document.getElementById('vote-buttons-container');
                 const confirmationArea = document.getElementById('vote-confirmation-area');
                 const confirmText = document.getElementById('vote-confirm-text');
                 const confirmBtn = document.getElementById('confirm-vote-btn');
@@ -663,7 +800,7 @@
                         e.currentTarget.classList.remove('btn-secondary');
                         e.currentTarget.classList.add('btn-primary');
 
-                        confirmText.textContent = `Vote for ${selectedName}?`;
+                        confirmText.textContent = `${selectedName}に投票しますか？`;
                         confirmationArea.classList.remove('hidden');
                     });
                 });
@@ -680,12 +817,14 @@
 
                 confirmBtn.addEventListener('click', () => {
                     if (selectedVoteId) {
+                        // Immediate UI feedback
+                        render(`<div class="screen"><div class="card text-center"><p class="text-xl">投票しました。他の人を待っています...</p></div></div>`);
                         handleVote(selectedVoteId, room);
                     }
                 });
             }
 
-            function tallyVotesAndProceed(players, roomRef, transaction) {
+            function tallyVotesAndProceed(players, roomRef, transaction, settings) {
                 let maxVotes = -1;
                 let mostVotedIds = [];
                 Object.values(players).filter(p => !p.isEliminated).forEach(p => {
@@ -699,33 +838,34 @@
                 });
                 
                 let lastEliminatedId = null;
+                const updatedPlayers = { ...players };
                 if (mostVotedIds.length === 1 && maxVotes > 0) {
                     lastEliminatedId = mostVotedIds[0];
+                    updatedPlayers[lastEliminatedId].isEliminated = true;
                 }
 
-                const updatePayload = { gameState: 'results', lastEliminatedId };
-                if(lastEliminatedId) {
-                    updatePayload[`players.${lastEliminatedId}.isEliminated`] = true;
-                }
-                
-                Object.keys(players).forEach(id => {
-                    updatePayload[`players.${id}.votes`] = 0;
-                    updatePayload[`players.${id}.hasVoted`] = false;
+                Object.keys(updatedPlayers).forEach(id => {
+                    updatedPlayers[id].votes = 0;
+                    updatedPlayers[id].hasVoted = false;
                 });
-
-                transaction.update(roomRef, updatePayload);
+                
+                transaction.update(roomRef, { 
+                    gameState: 'results', 
+                    lastEliminatedId,
+                    players: updatedPlayers
+                });
             }
 
             function addResultsListeners(room) {
                 if (!localState.isHost) return;
                 document.getElementById('next-round-btn').addEventListener('click', async () => {
-                    const roomRef = doc(db, "rooms", room.id);
+                    const roomRef = getRoomRef(room.id);
                     
                     const remainingPlayers = Object.values(room.players).filter(p => !p.isEliminated);
                     const remainingWolves = remainingPlayers.filter(p => p.role === 'wolf').length;
                     const remainingCitizens = remainingPlayers.length - remainingWolves;
                     const currentTurn = room.currentTurn || 1;
-                    const maxTurns = room.settings.turnCount || 3;
+                    const maxTurns = room.settings.turnCount || 1;
                     
                     if (room.lastEliminatedId && room.players[room.lastEliminatedId].role === 'wolf' && remainingWolves === 0 && room.settings.wolfCount === 1) {
                         await updateDoc(roomRef, { gameState: 'wolf_guess' });
@@ -758,7 +898,7 @@
                 if (localState.userId !== room.lastEliminatedId) return;
                 document.getElementById('submit-guess-btn').addEventListener('click', async () => {
                     const guess = document.getElementById('wolf-guess-input').value.trim();
-                    const roomRef = doc(db, "rooms", room.id);
+                    const roomRef = getRoomRef(room.id);
                     if (guess.toLowerCase() === room.words.citizen.toLowerCase()) {
                         await updateDoc(roomRef, { gameState: 'end_game', winner: 'wolves' });
                     } else {
@@ -770,15 +910,13 @@
             function addEndGameListeners(room) {
                 if (!localState.isHost) return;
                 document.getElementById('play-again-btn').addEventListener('click', async () => {
-                    const roomRef = doc(db, "rooms", room.id);
+                    const roomRef = getRoomRef(room.id);
                     const playersReset = { ...room.players };
                     Object.keys(playersReset).forEach(id => {
-                        delete playersReset[id].role;
-                        delete playersReset[id].word;
-                        delete playersReset[id].acknowledged;
-                        delete playersReset[id].isEliminated;
-                        delete playersReset[id].hasVoted;
-                        delete playersReset[id].votes;
+                        playersReset[id] = {
+                            name: playersReset[id].name,
+                            isHost: playersReset[id].isHost
+                        };
                     });
                     await updateDoc(roomRef, {
                         gameState: 'waiting',
@@ -793,19 +931,26 @@
                 });
             }
 
-            // --- Initial Load ---
-            onAuthStateChanged(auth, (user) => {
+            // --- Initial Load & Auth ---
+            onAuthStateChanged(auth, async (user) => {
                 if (user) {
                     localState.userId = user.uid;
+                    // Check if there's a room ID in the URL path
                     const pathRoomId = window.location.pathname.split('/room/')[1];
                     if(pathRoomId) {
-                        joinRoom(pathRoomId.toUpperCase());
+                        await joinRoom(pathRoomId.toUpperCase());
                     } else {
                         render(getHomeScreenHTML());
                         addHomeListeners();
+                        document.getElementById('user-id-display').textContent = user.uid;
                     }
                 } else {
-                    signInAnonymously(auth);
+                    // Use custom token if available, otherwise sign in anonymously
+                    if (typeof __initial_auth_token !== 'undefined' && __initial_auth_token) {
+                        await signInWithCustomToken(auth, __initial_auth_token);
+                    } else {
+                        await signInAnonymously(auth);
+                    }
                 }
             });
 
@@ -815,7 +960,7 @@
                 localState.isHost = true;
                 const roomId = Math.random().toString(36).substring(2, 8).toUpperCase();
                 window.history.pushState({}, '', `/room/${roomId}`);
-                const roomRef = doc(db, "rooms", roomId);
+                const roomRef = getRoomRef(roomId);
                 const newPlayer = {
                     [localState.userId]: { name: localState.playerName, isHost: true }
                 };
@@ -824,24 +969,25 @@
                     hostId: localState.userId,
                     gameState: 'waiting',
                     players: newPlayer,
-                    settings: { wolfCount: 1, topic: 'food', language: 'en', turnCount: 3, talkTime: 180, finalTalkTime: 60 }
+                    settings: { wolfCount: 1, topic: 'food', language: 'ja', turnCount: 1, talkTime: 180, finalTalkTime: 60, votingTime: 30 }
                 });
                 attachRoomListener(roomId);
             }
 
-            async function joinRoom(roomId) {
+            async function joinRoom(roomIdFromUrl) {
+                let roomId = roomIdFromUrl;
                 if (!roomId) {
                     const joinId = document.getElementById('join-room-id-input').value.trim().toUpperCase();
-                     if(!joinId) { alert('Please enter a Room ID.'); return; }
+                     if(!joinId) { showMessage('ルームIDを入力してください。', true); return; }
                      roomId = joinId;
                 }
                 if (!validatePlayerName()) return;
                 
-                const roomRef = doc(db, "rooms", roomId);
+                const roomRef = getRoomRef(roomId);
                 const roomSnap = await getDoc(roomRef);
 
                 if (!roomSnap.exists()) {
-                    alert("Room not found!");
+                    showMessage("ルームが見つかりません！", true);
                     return;
                 }
                 
@@ -857,7 +1003,7 @@
                 if(!nameInput) return true; // Already in a room
                 const playerName = nameInput.value.trim();
                 if (!playerName) {
-                    alert('Please enter your name.');
+                    showMessage('名前を入力してください。', true);
                     return false;
                 }
                 localState.playerName = playerName;
@@ -868,8 +1014,8 @@
             appContainer.innerHTML = `
                 <div class="screen">
                     <div class="card text-center">
-                        <h1 class="text-2xl font-bold text-red-500">An Error Occurred</h1>
-                        <p class="text-gray-400 mt-4">Could not load the game. Please check the Firebase configuration in the code and try again.</p>
+                        <h1 class="text-2xl font-bold text-red-500">エラーが発生しました</h1>
+                        <p class="text-gray-400 mt-4">ゲームを読み込めませんでした。Firebaseの設定を確認して、もう一度お試しください。</p>
                         <p class="text-xs text-gray-500 mt-2">${error.message}</p>
                     </div>
                 </div>
