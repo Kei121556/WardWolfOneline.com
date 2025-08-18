@@ -100,6 +100,7 @@
         <div class="screen">
             <div class="card text-center">
                 <p class="text-2xl">Loading Game...</p>
+                 <div class="loader mt-4"></div>
             </div>
         </div>
     </div>
@@ -122,64 +123,31 @@
     </div>
 
     <script type="module">
+        // Firebase Imports
         import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
         import { getFirestore, doc, setDoc, getDoc, updateDoc, onSnapshot, runTransaction, collection, getDocs, writeBatch, deleteDoc } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
-        import { getAuth, signInAnonymously, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
+        import { getAuth, signInAnonymously, onAuthStateChanged, signInWithCustomToken } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
 
-        const appContainer = document.getElementById('app-container');
-        
-        // --- Modal Logic ---
-        const messageBoxContainer = document.getElementById('message-box-container');
-        const messageBoxText = document.getElementById('message-box-text');
-        const messageBoxCloseBtn = document.getElementById('message-box-close');
-        let messageBoxCallback = null;
+        // --- Constants ---
+        const TOPICS_EN = { food: [["Curry", "Stew"], ["Udon", "Soba"], ["Beer", "Low-malt Beer"], ["Apple", "Pear"], ["Macaron", "Fatcaron"], ["Sushi", "Sashimi"], ["Coffee", "Tea"], ["Steak", "Hamburger"], ["Pasta", "Pizza"], ["Pancake", "Waffle"], ["Chocolate", "Caramel"], ["Cheese", "Butter"]], places: [["Tokyo Tower", "Skytree"], ["Disneyland", "DisneySea"], ["Kinkaku-ji", "Ginkaku-ji"], ["Ocean", "River"], ["Convenience Store", "Supermarket"], ["Mountain", "Volcano"], ["School", "Hospital"], ["Museum", "Art Gallery"], ["Airport", "Train Station"], ["Park", "Garden"], ["Library", "Bookstore"], ["Cafe", "Restaurant"]], people: [["Actor", "Voice Actor"], ["Santa Claus", "Reindeer"], ["Teacher", "Student"], ["King", "President"], ["Scientist", "Inventor"], ["Artist", "Musician"], ["Chef", "Pâtissier"], ["Athlete", "Coach"], ["Detective", "Police Officer"], ["YouTuber", "Streamer"], ["Pilot", "Astronaut"], ["Farmer", "Gardener"]], actions: [["Running", "Jogging"], ["Cooking", "Eating"], ["Sleeping", "Napping"], ["Studying", "Working"], ["Clapping", "Hand clapping"], ["Singing", "Dancing"], ["Reading", "Writing"], ["Drawing", "Painting"], ["Laughing", "Crying"], ["Walking", "Hiking"], ["Push", "Pull"], ["Throw", "Catch"]], things: [["Smartphone", "Cellphone"], ["Shampoo", "Conditioner"], ["PC", "Laptop"], ["Pencil", "Mechanical Pencil"], ["Umbrella", "Parasol"], ["Chair", "Sofa"], ["Book", "Magazine"], ["Key", "Lock"], ["Watch", "Clock"], ["Glasses", "Sunglasses"], ["Spoon", "Fork"], ["Towel", "Blanket"]], sports: [["Soccer", "Futsal"], ["Baseball", "Softball"], ["Tennis", "Badminton"], ["Table Tennis", "Ping-Pong"], ["Swimming", "Diving"], ["Skiing", "Snowboarding"], ["Basketball", "Volleyball"], ["Judo", "Karate"], ["Golf", "Bowling"], ["Boxing", "Wrestling"], ["Skateboarding", "Surfing"], ["Archery", "Darts"]], entertainment: [["Movie", "Drama"], ["Manga", "Anime"], ["Theater", "Musical"], ["YouTube", "TikTok"], ["Concert", "Festival"], ["Comedy", "Tragedy"], ["Radio", "Podcast"], ["Circus", "Magic Show"], ["Ballet", "Opera"], ["Video Game", "Arcade Game"], ["Novel", "Poem"], ["Sculpture", "Painting"]], animals: [["Dog", "Cat"], ["Lion", "Tiger"], ["Dolphin", "Whale"], ["Hamster", "Guinea Pig"], ["Horse", "Zebra"], ["Chicken", "Duck"], ["Snake", "Lizard"], ["Butterfly", "Moth"], ["Spider", "Scorpion"], ["Rabbit", "Hare"], ["Penguin", "Ostrich"], ["Frog", "Toad"]], nature: [["Sun", "Moon"], ["Mountain", "Hill"], ["Spring", "Autumn"], ["Thunder", "Lightning"], ["Cloud", "Fog"], ["Rain", "Snow"], ["Wind", "Breeze"], ["Star", "Planet"], ["Forest", "Jungle"], ["Desert", "Oasis"], ["River", "Lake"], ["Volcano", "Geyser"]], tech: [["AI", "Robot"], ["Internet", "Intranet"], ["VR", "AR"], ["Programming", "Coding"], ["Drone", "Helicopter"], ["Email", "Letter"], ["Headphones", "Earphones"], ["Camera", "Video Camera"], ["Printer", "Scanner"], ["Tablet", "e-Reader"], ["Mouse", "Keyboard"], ["Battery", "Charger"]], fantasy: [["Wizard", "Witch"], ["Dragon", "Wyvern"], ["Elf", "Dwarf"], ["Hero", "Demon Lord"], ["Ghost", "Zombie"], ["Angel", "Demon"], ["Unicorn", "Pegasus"], ["Vampire", "Werewolf"], ["Mermaid", "Siren"], ["Fairy", "Goblin"], ["Phoenix", "Griffin"], ["Potion", "Spell"]], games: [["Mario", "Luigi"], ["Final Fantasy", "Dragon Quest"], ["Puzzle", "Quiz"], ["Board Game", "Card Game"], ["Pokémon", "Digimon"], ["Minecraft", "Roblox"], ["Chess", "Shogi"], ["Tag", "Hide-and-seek"], ["Poker", "Blackjack"], ["Billiards", "Darts"], ["Monopoly", "Scrabble"], ["Tetris", "Pac-Man"]], history: [["Rome", "Greece"], ["Knight", "Samurai"], ["Pyramid", "Sphinx"], ["World War I", "World War II"], ["Renaissance", "Industrial Revolution"], ["Castle", "Fortress"], ["Viking", "Pirate"], ["Dinosaur", "Mammoth"], ["King", "Emperor"], ["Revolution", "Rebellion"], ["Napoleon", "Caesar"], ["Cleopatra", "Joan of Arc"]], jobs: [["Doctor", "Nurse"], ["Police Officer", "Firefighter"], ["Baker", "Pâtissier"], ["Pilot", "Cabin Attendant"], ["Lawyer", "Prosecutor"], ["Writer", "Journalist"], ["Designer", "Architect"], ["Farmer", "Fisherman"], ["Singer", "Dancer"], ["Engineer", "Mechanic"], ["Photographer", "Videographer"], ["Librarian", "Curator"]], colors: [["Red", "Pink"], ["Black", "Navy"], ["Gold", "Silver"], ["Orange", "Brown"], ["Green", "Lime"], ["Blue", "Sky Blue"], ["Purple", "Lavender"], ["White", "Ivory"], ["Gray", "Charcoal"], ["Beige", "Cream"], ["Turquoise", "Teal"], ["Magenta", "Fuchsia"]], uk: [["Big Ben", "Tower of London"], ["Buckingham Palace", "Windsor Castle"], ["Football", "Rugby"], ["Fish and Chips", "Shepherd's Pie"], ["The Beatles", "The Rolling Stones"], ["Sherlock Holmes", "James Bond"], ["Tea", "Afternoon Tea"], ["England", "Scotland"], ["House of Commons", "House of Lords"], ["Harry Potter", "The Lord of the Rings"], ["Queen", "Oasis"], ["Wimbledon", "The Open Championship"], ["Stonehenge", "Hadrian's Wall"], ["The British Museum", "The National Gallery"], ["Tower Bridge", "London Bridge"], ["Edinburgh Castle", "Cardiff Castle"], ["London", "Manchester"], ["Scone", "Crumpet"], ["Gin", "Whisky"], ["Prince", "Princess"], ["Double-decker bus", "Black cab"], ["King Arthur", "Robin Hood"], ["Thames River", "River Severn"], ["London Eye", "The Shard"], ["Cheddar cheese", "Stilton cheese"], ["Red telephone box", "Red post box"], ["Shakespeare", "Charles Dickens"], ["Oxford University", "Cambridge University"], ["Paddington Bear", "Winnie-the-Pooh"], ["Jaffa Cakes", "Digestive Biscuits"], ["Union Jack", "Flag of England"]] };
+        const TOPIC_NAMES_EN = { food: "Food & Drink", places: "Places", people: "People", actions: "Actions", things: "Things", sports: "Sports", entertainment: "Entertainment", animals: "Animals", nature: "Nature", tech: "Technology", fantasy: "Fantasy", games: "Games", history: "History", jobs: "Jobs", colors: "Colors", uk: "About the UK" };
+        const TOPIC_NAMES_JA = { food: "食べ物・飲み物", places: "場所", people: "人物", actions: "行動", things: "モノ", sports: "スポーツ", entertainment: "エンタメ", animals: "動物", nature: "自然", tech: "テクノロジー", fantasy: "ファンタジー", games: "ゲーム", history: "歴史", jobs: "職業", colors: "色", uk: "イギリス関連" };
 
-        function showMessage(message, callback) {
-            messageBoxText.textContent = message;
-            messageBoxCallback = callback || null;
-            messageBoxContainer.classList.add('visible');
-        }
-        messageBoxCloseBtn.addEventListener('click', () => {
-            messageBoxContainer.classList.remove('visible');
-            if (messageBoxCallback) messageBoxCallback();
-        });
-        
-        const rejoinPromptContainer = document.getElementById('rejoin-prompt-container');
-        const rejoinPromptText = document.getElementById('rejoin-prompt-text');
-        const rejoinConfirmBtn = document.getElementById('rejoin-confirm-btn');
-        const rejoinCancelBtn = document.getElementById('rejoin-cancel-btn');
+        /**
+         * The main class that orchestrates the Word Wolf game.
+         * It handles Firebase initialization, authentication, UI rendering, and game logic.
+         */
+        class WordWolfGame {
+            constructor() {
+                // Firebase services
+                this.db = null;
+                this.auth = null;
 
-        function showRejoinPrompt(roomId, onConfirm, onCancel) {
-            rejoinPromptText.textContent = `You were in Room ${roomId}. Would you like to rejoin?`;
-            rejoinConfirmBtn.onclick = () => { rejoinPromptContainer.classList.remove('visible'); onConfirm(); };
-            rejoinCancelBtn.onclick = () => { rejoinPromptContainer.classList.remove('visible'); onCancel(); };
-            rejoinPromptContainer.classList.add('visible');
-        }
-
-        // --- Firebase Initialization ---
-        let db, auth;
-        
-        async function initializeGame() {
-            try {
-                const firebaseConfig = {
-                    apiKey: "AIzaSyDn4Opa-EY6Dm1ZZ1TAGAomTa2EJPjOXxQ",
-                    authDomain: "wordwolfononline.firebaseapp.com",
-                    projectId: "wordwolfononline",
-                    storageBucket: "wordwolfononline.appspot.com",
-                    messagingSenderId: "215407092675",
-                    appId: "1:215407092675:web:a2d2f71de0c71430e71376",
-                    measurementId: "G-BGJL4PKZ19"
-                };
-
-                if (firebaseConfig.apiKey === "YOUR_API_KEY") {
-                    throw new Error("Firebase configuration is missing. Please update the firebaseConfig object in the code.");
-                }
+                // DOM elements
+                this.appContainer = document.getElementById('app-container');
                 
-                const app = initializeApp(firebaseConfig);
-                db = getFirestore(app);
-                auth = getAuth(app);
-
-                let localState = {
+                // Local game state
+                this.localState = {
                     userId: null,
                     playerName: localStorage.getItem('playerName') || '',
                     roomId: null,
@@ -188,857 +156,1002 @@
                     timerInterval: null,
                     aiGeneratedPair: null,
                 };
-
-                function getRoomRef(roomId) {
-                    return doc(db, "rooms", roomId);
-                }
-
-                // --- Topics ---
-                const TOPICS_EN = { food: [["Curry", "Stew"], ["Udon", "Soba"], ["Beer", "Low-malt Beer"], ["Apple", "Pear"], ["Macaron", "Fatcaron"], ["Sushi", "Sashimi"], ["Coffee", "Tea"], ["Steak", "Hamburger"], ["Pasta", "Pizza"], ["Pancake", "Waffle"], ["Chocolate", "Caramel"], ["Cheese", "Butter"]], places: [["Tokyo Tower", "Skytree"], ["Disneyland", "DisneySea"], ["Kinkaku-ji", "Ginkaku-ji"], ["Ocean", "River"], ["Convenience Store", "Supermarket"], ["Mountain", "Volcano"], ["School", "Hospital"], ["Museum", "Art Gallery"], ["Airport", "Train Station"], ["Park", "Garden"], ["Library", "Bookstore"], ["Cafe", "Restaurant"]], people: [["Actor", "Voice Actor"], ["Santa Claus", "Reindeer"], ["Teacher", "Student"], ["King", "President"], ["Scientist", "Inventor"], ["Artist", "Musician"], ["Chef", "Pâtissier"], ["Athlete", "Coach"], ["Detective", "Police Officer"], ["YouTuber", "Streamer"], ["Pilot", "Astronaut"], ["Farmer", "Gardener"]], actions: [["Running", "Jogging"], ["Cooking", "Eating"], ["Sleeping", "Napping"], ["Studying", "Working"], ["Clapping", "Hand clapping"], ["Singing", "Dancing"], ["Reading", "Writing"], ["Drawing", "Painting"], ["Laughing", "Crying"], ["Walking", "Hiking"], ["Push", "Pull"], ["Throw", "Catch"]], things: [["Smartphone", "Cellphone"], ["Shampoo", "Conditioner"], ["PC", "Laptop"], ["Pencil", "Mechanical Pencil"], ["Umbrella", "Parasol"], ["Chair", "Sofa"], ["Book", "Magazine"], ["Key", "Lock"], ["Watch", "Clock"], ["Glasses", "Sunglasses"], ["Spoon", "Fork"], ["Towel", "Blanket"]], sports: [["Soccer", "Futsal"], ["Baseball", "Softball"], ["Tennis", "Badminton"], ["Table Tennis", "Ping-Pong"], ["Swimming", "Diving"], ["Skiing", "Snowboarding"], ["Basketball", "Volleyball"], ["Judo", "Karate"], ["Golf", "Bowling"], ["Boxing", "Wrestling"], ["Skateboarding", "Surfing"], ["Archery", "Darts"]], entertainment: [["Movie", "Drama"], ["Manga", "Anime"], ["Theater", "Musical"], ["YouTube", "TikTok"], ["Concert", "Festival"], ["Comedy", "Tragedy"], ["Radio", "Podcast"], ["Circus", "Magic Show"], ["Ballet", "Opera"], ["Video Game", "Arcade Game"], ["Novel", "Poem"], ["Sculpture", "Painting"]], animals: [["Dog", "Cat"], ["Lion", "Tiger"], ["Dolphin", "Whale"], ["Hamster", "Guinea Pig"], ["Horse", "Zebra"], ["Chicken", "Duck"], ["Snake", "Lizard"], ["Butterfly", "Moth"], ["Spider", "Scorpion"], ["Rabbit", "Hare"], ["Penguin", "Ostrich"], ["Frog", "Toad"]], nature: [["Sun", "Moon"], ["Mountain", "Hill"], ["Spring", "Autumn"], ["Thunder", "Lightning"], ["Cloud", "Fog"], ["Rain", "Snow"], ["Wind", "Breeze"], ["Star", "Planet"], ["Forest", "Jungle"], ["Desert", "Oasis"], ["River", "Lake"], ["Volcano", "Geyser"]], tech: [["AI", "Robot"], ["Internet", "Intranet"], ["VR", "AR"], ["Programming", "Coding"], ["Drone", "Helicopter"], ["Email", "Letter"], ["Headphones", "Earphones"], ["Camera", "Video Camera"], ["Printer", "Scanner"], ["Tablet", "e-Reader"], ["Mouse", "Keyboard"], ["Battery", "Charger"]], fantasy: [["Wizard", "Witch"], ["Dragon", "Wyvern"], ["Elf", "Dwarf"], ["Hero", "Demon Lord"], ["Ghost", "Zombie"], ["Angel", "Demon"], ["Unicorn", "Pegasus"], ["Vampire", "Werewolf"], ["Mermaid", "Siren"], ["Fairy", "Goblin"], ["Phoenix", "Griffin"], ["Potion", "Spell"]], games: [["Mario", "Luigi"], ["Final Fantasy", "Dragon Quest"], ["Puzzle", "Quiz"], ["Board Game", "Card Game"], ["Pokémon", "Digimon"], ["Minecraft", "Roblox"], ["Chess", "Shogi"], ["Tag", "Hide-and-seek"], ["Poker", "Blackjack"], ["Billiards", "Darts"], ["Monopoly", "Scrabble"], ["Tetris", "Pac-Man"]], history: [["Rome", "Greece"], ["Knight", "Samurai"], ["Pyramid", "Sphinx"], ["World War I", "World War II"], ["Renaissance", "Industrial Revolution"], ["Castle", "Fortress"], ["Viking", "Pirate"], ["Dinosaur", "Mammoth"], ["King", "Emperor"], ["Revolution", "Rebellion"], ["Napoleon", "Caesar"], ["Cleopatra", "Joan of Arc"]], jobs: [["Doctor", "Nurse"], ["Police Officer", "Firefighter"], ["Baker", "Pâtissier"], ["Pilot", "Cabin Attendant"], ["Lawyer", "Prosecutor"], ["Writer", "Journalist"], ["Designer", "Architect"], ["Farmer", "Fisherman"], ["Singer", "Dancer"], ["Engineer", "Mechanic"], ["Photographer", "Videographer"], ["Librarian", "Curator"]], colors: [["Red", "Pink"], ["Black", "Navy"], ["Gold", "Silver"], ["Orange", "Brown"], ["Green", "Lime"], ["Blue", "Sky Blue"], ["Purple", "Lavender"], ["White", "Ivory"], ["Gray", "Charcoal"], ["Beige", "Cream"], ["Turquoise", "Teal"], ["Magenta", "Fuchsia"]], uk: [["Big Ben", "Tower of London"], ["Buckingham Palace", "Windsor Castle"], ["Football", "Rugby"], ["Fish and Chips", "Shepherd's Pie"], ["The Beatles", "The Rolling Stones"], ["Sherlock Holmes", "James Bond"], ["Tea", "Afternoon Tea"], ["England", "Scotland"], ["House of Commons", "House of Lords"], ["Harry Potter", "The Lord of the Rings"], ["Queen", "Oasis"], ["Wimbledon", "The Open Championship"], ["Stonehenge", "Hadrian's Wall"], ["The British Museum", "The National Gallery"], ["Tower Bridge", "London Bridge"], ["Edinburgh Castle", "Cardiff Castle"], ["London", "Manchester"], ["Scone", "Crumpet"], ["Gin", "Whisky"], ["Prince", "Princess"], ["Double-decker bus", "Black cab"], ["King Arthur", "Robin Hood"], ["Thames River", "River Severn"], ["London Eye", "The Shard"], ["Cheddar cheese", "Stilton cheese"], ["Red telephone box", "Red post box"], ["Shakespeare", "Charles Dickens"], ["Oxford University", "Cambridge University"], ["Paddington Bear", "Winnie-the-Pooh"], ["Jaffa Cakes", "Digestive Biscuits"], ["Union Jack", "Flag of England"]] };
-                const TOPIC_NAMES_EN = { food: "Food & Drink", places: "Places", people: "People", actions: "Actions", things: "Things", sports: "Sports", entertainment: "Entertainment", animals: "Animals", nature: "Nature", tech: "Technology", fantasy: "Fantasy", games: "Games", history: "History", jobs: "Jobs", colors: "Colors", uk: "About the UK" };
-                const TOPIC_NAMES_JA = { food: "食べ物・飲み物", places: "場所", people: "人物", actions: "行動", things: "モノ", sports: "スポーツ", entertainment: "エンタメ", animals: "動物", nature: "自然", tech: "テクノロジー", fantasy: "ファンタジー", games: "ゲーム", history: "歴史", jobs: "職業", colors: "色", uk: "イギリス関連" };
-
-                function render(html) { appContainer.innerHTML = html; }
-
-                // --- UI TEMPLATES ---
-
-                function getHomeScreenHTML() {
-                    return `
-                        <div class="screen">
-                            <div class="card text-center">
-                                <h1 class="text-4xl font-bold text-violet-400">Word Wolf</h1>
-                                <p class="text-gray-300 mt-2 mb-8">The Ultimate Word Finding Game</p>
-                                <div class="space-y-4">
-                                    <input type="text" id="player-name-input" class="form-input text-center" placeholder="Enter your name" value="${localState.playerName}">
-                                    <button id="create-room-btn" class="btn btn-primary w-full">Create Room</button>
-                                    <div class="flex items-center gap-2">
-                                        <input type="text" id="join-room-id-input" class="form-input text-center" placeholder="Room ID">
-                                        <button id="join-room-btn" class="btn btn-secondary">Join</button>
-                                    </div>
-                                </div>
-                                <div class="mt-6 text-xs text-gray-500 text-left p-2 border border-gray-700 rounded-md">
-                                    <p class="font-bold mb-1">Your User ID:</p>
-                                    <p class="font-mono break-all" id="user-id-display">Loading...</p>
-                                </div>
-                                <button id="show-rules-btn" style="color: var(--link-color);" class="mt-8">How to Play & Credits</button>
-                            </div>
-                        </div>
-                    `;
-                }
                 
-                function getRulesAndCreditsHTML() {
-                   return `
-                        <div class="screen">
-                            <div class="card">
-                                <div class="text-center mb-6"><h1 class="text-3xl font-bold">Word Wolf</h1></div>
-                                <div class="space-y-6">
-                                    <div>
-                                        <h2 class="text-xl font-bold mb-2 text-violet-400">What is Word Wolf?</h2>
-                                        <p class="text-gray-300">It's a game to find the "wolf" who has been given a different word from everyone else (the "citizens"). Use discussion to find the person who doesn't quite fit in!</p>
-                                    </div>
-                                    <div>
-                                        <h2 class="text-xl font-bold mb-2 text-violet-400">Game Flow</h2>
-                                        <ol class="list-decimal rules-list space-y-2 text-gray-300">
-                                            <li><b>Setup:</b> The host sets the game rules in the waiting room.</li>
-                                            <li><b>Check Word:</b> Secretly check your assigned word. You won't be told your role!</li>
-                                            <li><b>Talk Time:</b> Discuss the topic to find the wolf.</li>
-                                            <li><b>Question Time:</b> One by one, ask another player a question that must be answered with "Yes" or "No".</li>
-                                            <li><b>Final Talk Time:</b> One last chance to discuss before the vote.</li>
-                                            <li><b>Vote:</b> Select a player and confirm your vote.</li>
-                                            <li><b>Result:</b> See who was eliminated and if the game ends!</li>
-                                        </ol>
-                                    </div>
-                                    <div>
-                                        <h2 class="text-xl font-bold mb-2 text-violet-400">Credits</h2>
-                                        <div class="text-gray-400 text-sm text-center space-y-1">
-                                            <p>Game Director: Kei</p>
-                                            <p>Development: KY</p>
-                                            <p>Development Support: Gemini</p>
-                                        </div>
-                                    </div>
-                                    <button id="back-to-home-btn" class="btn btn-primary w-full mt-4">Back</button>
-                                </div>
-                            </div>
-                        </div>
-                    `;
-                }
+                this.initialize();
+            }
 
-                function getWaitingRoomHTML(room) {
-                    const isHost = room.hostId === localState.userId;
-                    const sortedPlayers = Object.values(room.players).sort((a, b) => a.joinedAt - b.joinedAt);
-                    const playersHTML = sortedPlayers.map(p => `<span class="p-2 rounded-full bg-gray-700">${p.name} ${p.isHost ? '👑' : ''}</span>`).join('');
-                    const topicNames = room.settings.language === 'ja' ? TOPIC_NAMES_JA : TOPIC_NAMES_EN;
-                    const topicOptionsHTML = Object.keys(topicNames).map(key => `<option value="${key}">${topicNames[key]}</option>`).join('');
-
-                    return `
-                        <div class="screen">
-                            <div class="card text-center">
-                                <p class="text-gray-300">Room ID</p>
-                                <div class="bg-gray-900 p-3 rounded-md font-mono text-2xl tracking-widest my-2 cursor-pointer" id="room-id-display">${room.id}</div>
-                                <p id="copy-feedback" class="text-sm text-green-400 h-4"></p>
-                                <h2 class="text-xl font-bold mt-6 mb-3">Players (${Object.keys(room.players).length})</h2>
-                                <div class="flex flex-wrap justify-center gap-2 mb-6">${playersHTML}</div>
-                                ${isHost ? `
-                                    <div class="text-left space-y-4 mt-4 border-t border-gray-700 pt-4">
-                                        <div>
-                                            <label for="language" class="font-medium">Language</label>
-                                            <select id="language" class="form-select">
-                                                <option value="en" ${room.settings.language === 'en' ? 'selected' : ''}>English</option>
-                                                <option value="ja" ${room.settings.language === 'ja' ? 'selected' : ''}>日本語</option>
-                                            </select>
-                                        </div>
-                                        <div class="grid grid-cols-2 gap-4">
-                                            <div><label for="wolf-count" class="font-medium">Wolf Count</label><input id="wolf-count" type="number" class="form-input" value="${room.settings.wolfCount}" min="1"></div>
-                                            <div><label for="turn-count" class="font-medium">Rounds</label><input id="turn-count" type="number" class="form-input" value="${room.settings.turnCount}" min="1" max="5"></div>
-                                            <div><label for="talk-time" class="font-medium">Talk Time (sec)</label><input id="talk-time" type="number" class="form-input" value="${room.settings.talkTime}" min="10"></div>
-                                            <div><label for="final-talk-time" class="font-medium">Final Talk (sec)</label><input id="final-talk-time" type="number" class="form-input" value="${room.settings.finalTalkTime}" min="10"></div>
-                                            <div><label for="voting-time" class="font-medium">Voting Time (sec)</label><input id="voting-time" type="number" class="form-input" value="${room.settings.votingTime}" min="10"></div>
-                                        </div>
-                                        <div>
-                                            <label for="topic" class="font-medium">Topic</label>
-                                            <select id="topic" class="form-select">
-                                                <option value="ai_choice" ${room.settings.topic === 'ai_choice' ? 'selected' : ''}>AI Choice</option>
-                                                ${Object.keys(topicNames).map(key => `<option value="${key}" ${room.settings.topic === key ? 'selected' : ''}>${topicNames[key]}</option>`).join('')}
-                                                <option value="custom" ${room.settings.topic === 'custom' ? 'selected' : ''}>Custom</option>
-                                            </select>
-                                        </div>
-                                        <!-- AI Choice Area -->
-                                        <div id="ai-choice-area" class="hidden space-y-2">
-                                            <label for="ai-category" class="font-medium">Select a category for AI</label>
-                                            <select id="ai-category" class="form-select">${topicOptionsHTML}</select>
-                                            <button id="generate-ai-btn" class="btn btn-secondary w-full">Generate with AI</button>
-                                            <div id="ai-result-area" class="text-center p-2"></div>
-                                        </div>
-                                        <!-- Custom Topic Area -->
-                                        <div id="custom-topic-area" class="hidden space-y-2">
-                                            <label for="custom-category-name" class="font-medium">Custom Category Name</label>
-                                            <input id="custom-category-name" type="text" class="form-input" placeholder="e.g., Marvel Superheroes">
-                                            <label for="custom-word-list" class="font-medium">Word List (comma separated)</label>
-                                            <textarea id="custom-word-list" class="form-textarea" rows="3" placeholder="e.g., Iron Man, Captain America, Thor, Hulk"></textarea>
-                                        </div>
-                                    </div>
-                                    <button id="start-game-btn" class="btn btn-primary w-full mt-6">Start Game</button>
-                                ` : '<p class="text-gray-300 mt-6">Waiting for the host to start the game...</p>'}
-                            </div>
-                        </div>
-                    `;
-                }
-
-                function getRoleAssignmentHTML(room) {
-                    const me = room.players[localState.userId];
-                    return `
-                        <div class="screen">
-                            <div class="card text-center">
-                                <p class="text-gray-300 mt-6">Your Word is</p>
-                                <p class="text-4xl font-bold text-violet-400 my-4">${me.word}</p>
-                                <button id="ack-word-btn" class="btn btn-primary w-full">I Understand</button>
-                            </div>
-                        </div>
-                    `;
-                }
-                
-                function getTalkTimeHTML(room) {
-                    const sortedPlayers = Object.values(room.players).sort((a, b) => a.joinedAt - b.joinedAt);
-                    const playersHTML = sortedPlayers.map(p => {
-                        const isEliminated = p.isEliminated ? 'line-through opacity-50' : '';
-                        return `<span class="p-2 rounded-full bg-gray-700 ${isEliminated}">${p.name}</span>`;
-                    }).join('');
-                    const title = room.gameState === 'final_talk_time' ? 'Final Talk Time' : 'Talk Time';
-                    return `
-                        <div class="screen">
-                            <div class="card text-center w-full max-w-2xl">
-                                <p class="text-2xl font-bold mb-4">${title} (Round ${room.currentTurn})</p>
-                                <div id="timer-display" class="timer text-violet-400 mb-6">00:00</div>
-                                <p class="font-medium mb-2">Participants</p>
-                                <div class="flex flex-wrap justify-center gap-2">${playersHTML}</div>
-                            </div>
-                        </div>
-                    `;
-                }
-
-                function getQuestionTimeHTML(room) {
-                    const questionerId = room.questionerOrder[room.currentQuestionerIndex];
-                    const questioner = room.players[questionerId];
-                    const isMyTurn = questionerId === localState.userId;
-
-                    return `
-                        <div class="screen">
-                            <div class="card text-center">
-                                <h2 class="text-3xl font-bold mb-4">Question Time</h2>
-                                <p class="text-gray-300 mb-6">It's <span class="font-bold text-violet-400">${questioner.name}'s</span> turn to ask a question.</p>
-                                ${isMyTurn ? `
-                                    <p class="mb-4">Ask one person a question, or skip your turn.</p>
-                                    <div class="flex gap-4">
-                                        <button id="next-questioner-btn" class="btn btn-primary w-full">Next Questioner</button>
-                                        <button id="skip-question-btn" class="btn btn-secondary w-full">Skip</button>
-                                    </div>
-                                ` : ''}
-                            </div>
-                        </div>
-                    `;
-                }
-
-                function getVotingHTML(room) {
-                    const me = room.players[localState.userId];
-                    const isHost = room.hostId === localState.userId;
-
-                    if (me.isEliminated || (room.votes && room.votes[localState.userId])) {
-                        return `<div class="screen"><div class="card text-center"><p class="text-xl">Vote complete. Waiting for others...</p></div></div>`;
+            /**
+             * Initializes Firebase and sets up authentication listener.
+             */
+            async initialize() {
+                try {
+                    // Use environment variables for Firebase config
+                    if (typeof __firebase_config === 'undefined') {
+                        throw new Error("Firebase configuration is missing.");
                     }
-                    const sortedPlayers = Object.values(room.players).sort((a, b) => a.joinedAt - b.joinedAt);
-                    const voteButtonsHTML = sortedPlayers
-                        .filter(p => !p.isEliminated)
-                        .map(p => `<button class="btn btn-secondary w-full" data-vote-id="${p.id}" data-vote-name="${p.name}" ${p.id === localState.userId ? 'disabled' : ''}>${p.name}</button>`)
-                        .join('');
-                    return `
-                        <div class="screen">
-                            <div class="card text-center">
-                                <h2 class="text-3xl font-bold mb-4">Vote Time (Round ${room.currentTurn})</h2>
-                                <div id="timer-display" class="timer text-violet-400 mb-4">00:00</div>
-                                <p class="text-gray-300 mb-6">Who do you think is the Wolf?</p>
-                                <div id="vote-buttons-container" class="grid grid-cols-2 sm:grid-cols-3 gap-3">${voteButtonsHTML}</div>
-                                ${isHost ? `<div class="mt-6 text-lg border-t border-gray-700 pt-4">Voted: <span id="voted-count">0</span> / <span id="total-voters">0</span></div>` : ''}
-                                <div id="vote-confirmation-area" class="hidden mt-6 space-y-4 border-t border-gray-700 pt-4">
-                                    <p id="vote-confirm-text" class="text-lg"></p>
-                                    <div class="flex gap-4">
-                                        <button id="confirm-vote-btn" class="btn btn-primary w-full">Confirm</button>
-                                        <button id="cancel-vote-btn" class="btn btn-secondary w-full">Cancel</button>
-                                    </div>
-                                </div>
-                            </div>
-                        </div>
-                    `;
-                }
+                    const firebaseConfig = JSON.parse(__firebase_config);
+                    
+                    const app = initializeApp(firebaseConfig);
+                    this.db = getFirestore(app);
+                    this.auth = getAuth(app);
 
-                function getResultsHTML(room) {
-                    const eliminatedPlayer = Object.values(room.players).find(p => p.id === room.lastEliminatedId);
-                    let resultText = "The vote was a tie. No one was eliminated.";
-                    let roleRevealHTML = '';
-                    if (eliminatedPlayer) {
-                        resultText = `${eliminatedPlayer.name} has been voted out.`;
-                        const roleColor = eliminatedPlayer.role === 'wolf' ? 'text-red-500' : 'text-blue-500';
-                        roleRevealHTML = `<p class="text-xl">${eliminatedPlayer.name} was a <span class="font-bold ${roleColor}">${eliminatedPlayer.role}</span>.</p>`;
-                    }
-                    const isHost = room.hostId === localState.userId;
-                    return `
-                        <div class="screen">
-                            <div class="card text-center">
-                                <h2 class="text-3xl font-bold mb-4">Vote Results</h2>
-                                <p class="text-xl mb-6">${resultText}</p>
-                                ${roleRevealHTML}
-                                ${isHost ? '<button id="next-round-btn" class="btn btn-primary w-full mt-6">Continue</button>' : '<p class="text-gray-300 mt-6">Waiting for the host to continue...</p>'}
-                            </div>
-                        </div>
-                    `;
-                }
-                
-                function getWolfGuessHTML(room) {
-                    const guessingWolf = room.players[room.lastEliminatedId];
-                    const isMyTurn = localState.userId === guessingWolf.id;
-                    return `
-                        <div class="screen">
-                            <div class="card text-center">
-                                <h2 class="text-3xl font-bold mb-2">Wolf's Final Guess!</h2>
-                                <p class="text-gray-300 mb-6">${guessingWolf.name}, guess the Citizen's word for a comeback victory!</p>
-                                ${isMyTurn ? `
-                                    <input id="wolf-guess-input" type="text" class="form-input text-center mb-4" placeholder="Enter Citizen's word">
-                                    <button id="submit-guess-btn" class="btn btn-primary w-full">Submit Guess</button>
-                                ` : `<p>Waiting for ${guessingWolf.name} to guess...</p>`}
-                            </div>
-                        </div>
-                    `;
-                }
+                    this.setupModalListeners();
+                    this.setupAuthListener();
 
-                function getEndGameHTML(room) {
-                    return `
-                        <div class="screen">
-                            <div class="card text-center">
-                                <h2 class="text-4xl font-bold ${room.winner === 'citizens' ? 'text-blue-500' : 'text-red-500'}">${room.winner.charAt(0).toUpperCase() + room.winner.slice(1)} Win!</h2>
-                                <p class="my-6">The words were:</p>
-                                <div class="text-lg bg-gray-900 p-4 rounded-lg">
-                                    <p>Citizen: <span class="font-bold">${room.words.citizen}</span></p>
-                                    <p>Wolf: <span class="font-bold">${room.words.wolf}</span></p>
-                                </div>
-                                ${room.hostId === localState.userId ? '<button id="play-again-btn" class="btn btn-primary w-full mt-6">Play Again</button>' : '<p class="text-gray-300 mt-6">Waiting for the host...</p>'}
-                            </div>
-                        </div>
-                    `;
-                }
-                
-                // --- Game Logic ---
-                
-                async function startGame(room) {
-                    const roomRef = getRoomRef(room.id);
-                    const players = room.players;
-                    const settings = room.settings;
-                    const playerIds = Object.keys(players);
-                    
-                    if (playerIds.length < 3) {
-                        showMessage("You need at least 3 players to start.");
-                        return;
-                    }
-                    
-                    let wordPair;
-
-                    try {
-                        if (settings.topic === 'custom') {
-                            const wordList = (document.getElementById('custom-word-list').value || '').split(',')
-                                .map(w => w.trim()).filter(w => w);
-                            if (wordList.length < 2) {
-                                showMessage("Custom topic needs at least 2 comma-separated words.");
-                                return;
-                            }
-                            const shuffled = wordList.sort(() => 0.5 - Math.random());
-                            wordPair = shuffled.slice(0, 2);
-                        } else if (settings.topic === 'ai_choice') {
-                            if (!localState.aiGeneratedPair) {
-                                showMessage("Please generate a word pair with AI first.");
-                                return;
-                            }
-                            wordPair = localState.aiGeneratedPair;
-                        } else {
-                            const topicData = settings.language === 'ja' ? TOPICS_JA : TOPICS_EN;
-                            wordPair = topicData[settings.topic][Math.floor(Math.random() * topicData[settings.topic].length)];
-                        }
-                    } catch (error) {
-                        showMessage("Could not set up the words for the game. Please check the topic settings.");
-                        console.error(error);
-                        return;
-                    }
-
-                    const wolfCount = Math.max(1, Math.min(settings.wolfCount, playerIds.length - 1));
-                    let roles = Array(playerIds.length).fill('citizen');
-                    for(let i = 0; i < wolfCount; i++) roles[i] = 'wolf';
-                    roles.sort(() => 0.5 - Math.random());
-                    
-                    const [wordA, wordB] = wordPair.sort(() => 0.5 - Math.random());
-                    
-                    const updatedPlayers = { ...players };
-                    playerIds.forEach((id, index) => {
-                        updatedPlayers[id].role = roles[index];
-                        updatedPlayers[id].word = roles[index] === 'wolf' ? wordB : wordA;
-                        updatedPlayers[id].acknowledged = false;
-                    });
-                    
-                    const questionerOrder = [...playerIds].sort(() => 0.5 - Math.random());
-                    
-                    await updateDoc(roomRef, {
-                        gameState: 'role_assignment',
-                        players: updatedPlayers,
-                        words: { citizen: wordA, wolf: wordB },
-                        currentTurn: 1,
-                        questionerOrder: questionerOrder,
-                        currentQuestionerIndex: 0,
-                        votes: {} // Ensure votes map is cleared at the start
+                } catch (error) {
+                    console.error("Initialization Error:", error);
+                    this.showMessage(`Error: ${error.message}`, () => {
+                        this.render(this.getHomeScreenHTML());
                     });
                 }
+            }
+            
+            // --- AUTHENTICATION ---
 
-                function handlePhaseTimer(room) {
-                    if (localState.timerInterval) clearInterval(localState.timerInterval);
-                    const timerDisplay = document.getElementById('timer-display');
-                    if (!timerDisplay) return;
-
-                    const votedCountEl = document.getElementById('voted-count');
-                    const totalVotersEl = document.getElementById('total-voters');
-
-                    localState.timerInterval = setInterval(async () => {
-                        if (!room.phaseEndTime) { clearInterval(localState.timerInterval); return; }
-
-                        const serverTime = room.phaseEndTime.toMillis();
-                        const remaining = Math.max(0, Math.round((serverTime - Date.now()) / 1000));
-                        const minutes = String(Math.floor(remaining / 60)).padStart(2, '0');
-                        const seconds = String(remaining % 60).padStart(2, '0');
-                        if (timerDisplay) timerDisplay.textContent = `${minutes}:${seconds}`;
-
-                        if (room.gameState === 'voting' && localState.isHost && votedCountEl) {
-                            const totalVoters = Object.values(room.players).filter(p => !p.isEliminated).length;
-                            const votedCount = Object.keys(room.votes || {}).length;
-                            votedCountEl.textContent = votedCount;
-                            totalVotersEl.textContent = totalVoters;
-                        }
-
-                        if (remaining <= 0 && localState.isHost) {
-                            clearInterval(localState.timerInterval);
-                            const roomRef = getRoomRef(room.id);
-                            const currentRoomSnap = await getDoc(roomRef);
-                            const currentRoom = currentRoomSnap.data();
-
-                            switch (currentRoom.gameState) {
-                                case 'talk_time':
-                                    await updateDoc(roomRef, { gameState: 'question_time' }); break;
-                                case 'final_talk_time':
-                                    const votingTime = currentRoom.settings.votingTime || 30;
-                                    const phaseEndTime = new Date(Date.now() + votingTime * 1000);
-                                    await updateDoc(roomRef, { gameState: 'voting', phaseEndTime }); break;
-                                case 'voting':
-                                    // This is now a fallback, the main logic is in the listener
-                                    await handleVoteTally(currentRoom);
-                                    break;
-                            }
-                        }
-                    }, 500);
-                }
-
-                // --- Main Listener ---
-                
-                function attachRoomListener(roomId) {
-                    localState.roomId = roomId; // Store roomId in local state
-                    if (localState.roomUnsubscribe) localState.roomUnsubscribe();
-                    const roomRef = getRoomRef(roomId);
-                    localState.roomUnsubscribe = onSnapshot(roomRef, (doc) => {
-                        const roomData = doc.data();
-                        if (!roomData) {
-                            if(localState.roomUnsubscribe) localState.roomUnsubscribe();
-                            localStorage.removeItem('wordWolfRoomId');
-                            showMessage("The host has closed the room.", () => { window.location.href = '/'; });
-                            return;
-                        }
-                        
-                        localState.isHost = roomData.hostId === localState.userId;
-                        if(localState.timerInterval && !['talk_time', 'final_talk_time', 'voting'].includes(roomData.gameState)) {
-                            clearInterval(localState.timerInterval);
-                        }
-
-                        // Host-only logic to check if all votes are in
-                        if (localState.isHost && roomData.gameState === 'voting') {
-                            const activePlayers = Object.values(roomData.players).filter(p => !p.isEliminated);
-                            const votes = roomData.votes || {};
-                            if (Object.keys(votes).length >= activePlayers.length) {
-                                handleVoteTally(roomData);
-                            }
-                        }
-
-                        switch (roomData.gameState) {
-                            case 'waiting': render(getWaitingRoomHTML(roomData)); addWaitingRoomListeners(roomData); break;
-                            case 'role_assignment':
-                                const me = roomData.players[localState.userId];
-                                if (me && me.acknowledged) {
-                                    render(`<div class="screen"><div class="card text-center"><p class="text-xl">Waiting for other players to confirm...</p></div></div>`);
-                                } else {
-                                    render(getRoleAssignmentHTML(roomData)); addRoleAssignmentListeners(roomData);
-                                }
-                                break;
-                            case 'talk_time':
-                            case 'final_talk_time': render(getTalkTimeHTML(roomData)); handlePhaseTimer(roomData); break;
-                            case 'question_time': render(getQuestionTimeHTML(roomData)); addQuestionTimeListeners(roomData); break;
-                            case 'voting': render(getVotingHTML(roomData)); addVotingListeners(roomData); handlePhaseTimer(roomData); break;
-                            case 'results': render(getResultsHTML(roomData)); addResultsListeners(roomData); break;
-                            case 'wolf_guess': render(getWolfGuessHTML(roomData)); addWolfGuessListeners(roomData); break;
-                            case 'end_game':
-                                localStorage.removeItem('wordWolfRoomId');
-                                render(getEndGameHTML(roomData)); addEndGameListeners(roomData); break;
-                        }
-                    });
-                }
-                
-                // --- Event Listeners ---
-                function addHomeListeners() {
-                    document.getElementById('create-room-btn').addEventListener('click', createRoom);
-                    document.getElementById('join-room-btn').addEventListener('click', () => joinRoom(null));
-                    document.getElementById('show-rules-btn').addEventListener('click', () => {
-                        render(getRulesAndCreditsHTML());
-                        document.getElementById('back-to-home-btn').addEventListener('click', () => {
-                            renderHomeScreen();
-                        });
-                    });
-                }
-
-                function addWaitingRoomListeners(room) {
-                    if (localState.isHost) {
-                        const settingsToWatch = ['language', 'wolf-count', 'turn-count', 'talk-time', 'final-talk-time', 'voting-time', 'topic'];
-                        settingsToWatch.forEach(id => {
-                            const el = document.getElementById(id);
-                            if (el) el.addEventListener('change', () => updateSettings(room.id));
-                        });
-                        
-                        document.getElementById('start-game-btn').addEventListener('click', () => startGame(room));
-                        document.getElementById('generate-ai-btn').addEventListener('click', handleAiGeneration);
-                        
-                        const topicSelect = document.getElementById('topic');
-                        topicSelect.addEventListener('change', () => {
-                            const customArea = document.getElementById('custom-topic-area');
-                            const aiArea = document.getElementById('ai-choice-area');
-                            if (topicSelect.value === 'custom') {
-                                customArea.classList.remove('hidden');
-                                aiArea.classList.add('hidden');
-                            } else if (topicSelect.value === 'ai_choice') {
-                                customArea.classList.add('hidden');
-                                aiArea.classList.remove('hidden');
-                            } else {
-                                customArea.classList.add('hidden');
-                                aiArea.classList.add('hidden');
-                            }
-                        });
-                        topicSelect.dispatchEvent(new Event('change'));
-                    }
-                    document.getElementById('room-id-display').addEventListener('click', (e) => {
-                        navigator.clipboard.writeText(room.id);
-                        document.getElementById('copy-feedback').textContent = 'Copied!';
-                        setTimeout(() => { if(document.getElementById('copy-feedback')) document.getElementById('copy-feedback').textContent = '' }, 2000);
-                    });
-                }
-                
-                async function handleAcknowledgement(room) {
-                    const roomRef = getRoomRef(room.id);
-                    await runTransaction(db, async (transaction) => {
-                        const roomSnap = await transaction.get(roomRef);
-                        if (!roomSnap.exists()) { throw "Room does not exist!"; }
-                        
-                        const currentRoom = roomSnap.data();
-                        const updatedPlayers = { ...currentRoom.players };
-                        if(updatedPlayers[localState.userId]) {
-                           updatedPlayers[localState.userId].acknowledged = true;
-                        }
-                        
-                        transaction.update(roomRef, { players: updatedPlayers });
-
-                        const allAckd = Object.values(updatedPlayers).every(p => p.acknowledged);
-                        if (allAckd) {
-                            const talkTimeInSeconds = currentRoom.settings.talkTime || 180;
-                            const phaseEndTime = new Date(Date.now() + talkTimeInSeconds * 1000);
-                            transaction.update(roomRef, { 
-                                gameState: 'talk_time',
-                                phaseEndTime: phaseEndTime
-                            });
-                        }
-                    });
-                }
-
-                function addRoleAssignmentListeners(room) {
-                    document.getElementById('ack-word-btn').addEventListener('click', () => handleAcknowledgement(room));
-                }
-
-                async function handleQuestionTurn(room) {
-                    const roomRef = getRoomRef(room.id);
-                    const nextIndex = room.currentQuestionerIndex + 1;
-                    
-                    if (nextIndex >= room.questionerOrder.length) {
-                        const finalTalkTimeInSeconds = room.settings.finalTalkTime || 60;
-                        const phaseEndTime = new Date(Date.now() + finalTalkTimeInSeconds * 1000);
-                        await updateDoc(roomRef, { gameState: 'final_talk_time', phaseEndTime: phaseEndTime });
+            /**
+             * Listens for changes in the user's authentication state.
+             */
+            setupAuthListener() {
+                onAuthStateChanged(this.auth, async (user) => {
+                    if (user) {
+                        this.localState.userId = user.uid;
+                        this.handleUserAuthenticated();
                     } else {
-                        await updateDoc(roomRef, { currentQuestionerIndex: nextIndex });
-                    }
-                }
-
-                function addQuestionTimeListeners(room) {
-                    const isMyTurn = room.questionerOrder[room.currentQuestionerIndex] === localState.userId;
-                    if (isMyTurn) {
-                        document.getElementById('next-questioner-btn').addEventListener('click', () => handleQuestionTurn(room));
-                        document.getElementById('skip-question-btn').addEventListener('click', () => handleQuestionTurn(room));
-                    }
-                }
-
-                async function handleVote(votedId) {
-                    const roomRef = getRoomRef(localState.roomId);
-                    await updateDoc(roomRef, {
-                        [`votes.${localState.userId}`]: votedId
-                    });
-                }
-                
-                async function handleVoteTally(room) {
-                    const roomRef = getRoomRef(room.id);
-                    await runTransaction(db, async (transaction) => {
-                        const freshRoomSnap = await transaction.get(roomRef);
-                        if (!freshRoomSnap.exists() || freshRoomSnap.data().gameState !== 'voting') {
-                            return;
-                        }
-                        const players = freshRoomSnap.data().players;
-                        const votes = freshRoomSnap.data().votes || {};
-                        
-                        const voteCounts = {};
-                        Object.keys(players).forEach(id => {
-                            voteCounts[id] = 0;
-                        });
-
-                        for (const voterId in votes) {
-                            const votedForId = votes[voterId];
-                            if (voteCounts[votedForId] !== undefined) {
-                                voteCounts[votedForId]++;
-                            }
-                        }
-
-                        let maxVotes = -1;
-                        let mostVotedIds = [];
-                        for (const playerId in voteCounts) {
-                            if (players[playerId] && !players[playerId].isEliminated) {
-                                if (voteCounts[playerId] > maxVotes) {
-                                    maxVotes = voteCounts[playerId];
-                                    mostVotedIds = [playerId];
-                                } else if (voteCounts[playerId] === maxVotes) {
-                                    mostVotedIds.push(playerId);
-                                }
-                            }
-                        }
-                        
-                        let lastEliminatedId = null;
-                        const updatedPlayers = { ...players };
-                        if (mostVotedIds.length === 1 && maxVotes > 0) {
-                            lastEliminatedId = mostVotedIds[0];
-                            if (updatedPlayers[lastEliminatedId]) {
-                                updatedPlayers[lastEliminatedId].isEliminated = true;
-                            }
-                        }
-                        
-                        transaction.update(roomRef, { 
-                            gameState: 'results', 
-                            lastEliminatedId: lastEliminatedId, 
-                            players: updatedPlayers,
-                            votes: {} // Clear votes for next round
-                        });
-                    });
-                }
-
-
-                function addVotingListeners(room) {
-                    if (room.players[localState.userId]?.isEliminated || (room.votes && room.votes[localState.userId])) return;
-                    
-                    let selectedVoteId = null;
-                    const confirmationArea = document.getElementById('vote-confirmation-area');
-                    const confirmText = document.getElementById('vote-confirm-text');
-                    const confirmBtn = document.getElementById('confirm-vote-btn');
-                    const cancelBtn = document.getElementById('cancel-vote-btn');
-
-                    document.querySelectorAll('[data-vote-id]').forEach(button => {
-                        button.addEventListener('click', (e) => {
-                            selectedVoteId = e.currentTarget.dataset.voteId;
-                            const selectedName = e.currentTarget.dataset.voteName;
-                            
-                            document.querySelectorAll('[data-vote-id]').forEach(btn => btn.disabled = true);
-                            e.currentTarget.classList.remove('btn-secondary');
-                            e.currentTarget.classList.add('btn-primary');
-
-                            confirmText.textContent = `Vote for ${selectedName}?`;
-                            confirmationArea.classList.remove('hidden');
-                        });
-                    });
-
-                    cancelBtn.addEventListener('click', () => {
-                        selectedVoteId = null;
-                        document.querySelectorAll('[data-vote-id]').forEach(btn => {
-                            btn.disabled = (btn.dataset.voteId === localState.userId);
-                            btn.classList.remove('btn-primary');
-                            btn.classList.add('btn-secondary');
-                        });
-                        confirmationArea.classList.add('hidden');
-                    });
-
-                    confirmBtn.addEventListener('click', () => {
-                        if (selectedVoteId) {
-                            render(`<div class="screen"><div class="card text-center"><p class="text-xl">You have voted. Waiting for others...</p></div></div>`);
-                            handleVote(selectedVoteId);
-                        }
-                    });
-                }
-
-                function addResultsListeners(room) {
-                    if (!localState.isHost) return;
-                    document.getElementById('next-round-btn').addEventListener('click', async () => {
-                        const roomRef = getRoomRef(room.id);
-                        const remainingPlayers = Object.values(room.players).filter(p => !p.isEliminated);
-                        const remainingWolves = remainingPlayers.filter(p => p.role === 'wolf').length;
-                        const remainingCitizens = remainingPlayers.length - remainingWolves;
-                        const currentTurn = room.currentTurn || 1;
-                        const maxTurns = room.settings.turnCount || 1;
-
-                        // PRIORITY 1: Check if all wolves are gone.
-                        if (remainingWolves === 0) {
-                            if (room.lastEliminatedId && room.players[room.lastEliminatedId].role === 'wolf' && room.settings.wolfCount === 1) {
-                                await updateDoc(roomRef, { gameState: 'wolf_guess' });
+                        // Sign in the user if they aren't already
+                        try {
+                            if (typeof __initial_auth_token !== 'undefined' && __initial_auth_token) {
+                                await signInWithCustomToken(this.auth, __initial_auth_token);
                             } else {
-                                await updateDoc(roomRef, { gameState: 'end_game', winner: 'citizens' });
+                                await signInAnonymously(this.auth);
                             }
-                        } 
-                        // PRIORITY 2: Check if wolves now outnumber or equal citizens.
-                        else if (remainingWolves >= remainingCitizens) {
-                            await updateDoc(roomRef, { gameState: 'end_game', winner: 'wolves' });
-                        } 
-                        // PRIORITY 3: Check if it's the last turn and wolves are still alive.
-                        else if (currentTurn >= maxTurns) {
-                            await updateDoc(roomRef, { gameState: 'end_game', winner: 'wolves' });
-                        } 
-                        // PRIORITY 4: If no one has won, proceed to the next round.
-                        else {
-                            const talkTimeInSeconds = room.settings.talkTime || 180;
-                            const phaseEndTime = new Date(Date.now() + talkTimeInSeconds * 1000);
-                            const newQuestionerOrder = remainingPlayers.map(p => p.id).sort(() => 0.5 - Math.random());
-                            await updateDoc(roomRef, { 
-                                gameState: 'talk_time', phaseEndTime, lastEliminatedId: null,
-                                currentTurn: currentTurn + 1, questionerOrder: newQuestionerOrder, currentQuestionerIndex: 0
-                            });
+                        } catch (error) {
+                            console.error("Authentication failed:", error);
+                            this.showMessage("Could not sign in. Please refresh the page.");
+                        }
+                    }
+                });
+            }
+
+            /**
+             * Handles logic after a user is successfully authenticated.
+             * Checks for existing rooms in URL or local storage.
+             */
+            handleUserAuthenticated() {
+                const pathRoomId = window.location.pathname.split('/room/')[1];
+                const savedRoomId = localStorage.getItem('wordWolfRoomId');
+
+                if (pathRoomId) {
+                    this.joinRoom(pathRoomId.toUpperCase());
+                } else if (savedRoomId) {
+                    this.showRejoinPrompt(savedRoomId,
+                        () => this.joinRoom(savedRoomId),
+                        () => {
+                            localStorage.removeItem('wordWolfRoomId');
+                            this.renderHomeScreen();
+                        }
+                    );
+                } else {
+                    this.renderHomeScreen();
+                }
+            }
+            
+            // --- UI RENDERING & TEMPLATES ---
+
+            /**
+             * Renders HTML content into the main app container.
+             * @param {string} html - The HTML string to render.
+             */
+            render(html) {
+                this.appContainer.innerHTML = html;
+            }
+
+            /**
+             * Renders the initial home screen.
+             */
+            renderHomeScreen() {
+                this.render(this.getHomeScreenHTML());
+                this.addHomeListeners();
+                if (this.localState.userId) {
+                    const userIdDisplay = document.getElementById('user-id-display');
+                    if (userIdDisplay) userIdDisplay.textContent = this.localState.userId;
+                }
+            }
+            
+            // HTML template functions (getHomeScreenHTML, getWaitingRoomHTML, etc.)
+            // are largely unchanged from the original but are now methods of this class.
+            // ... (All get...HTML methods would be here) ...
+            getHomeScreenHTML() {
+                return `
+                    <div class="screen">
+                        <div class="card text-center">
+                            <h1 class="text-4xl font-bold text-violet-400">Word Wolf</h1>
+                            <p class="text-gray-300 mt-2 mb-8">The Ultimate Word Finding Game</p>
+                            <div class="space-y-4">
+                                <input type="text" id="player-name-input" class="form-input text-center" placeholder="Enter your name" value="${this.localState.playerName}">
+                                <button id="create-room-btn" class="btn btn-primary w-full">Create Room</button>
+                                <div class="flex items-center gap-2">
+                                    <input type="text" id="join-room-id-input" class="form-input text-center" placeholder="Room ID">
+                                    <button id="join-room-btn" class="btn btn-secondary">Join</button>
+                                </div>
+                            </div>
+                            <div class="mt-6 text-xs text-gray-500 text-left p-2 border border-gray-700 rounded-md">
+                                <p class="font-bold mb-1">Your User ID:</p>
+                                <p class="font-mono break-all" id="user-id-display">Loading...</p>
+                            </div>
+                            <button id="show-rules-btn" style="color: var(--link-color);" class="mt-8">How to Play & Credits</button>
+                        </div>
+                    </div>
+                `;
+            }
+
+            getRulesAndCreditsHTML() {
+               return `
+                    <div class="screen">
+                        <div class="card">
+                            <div class="text-center mb-6"><h1 class="text-3xl font-bold">Word Wolf</h1></div>
+                            <div class="space-y-6">
+                                <div>
+                                    <h2 class="text-xl font-bold mb-2 text-violet-400">What is Word Wolf?</h2>
+                                    <p class="text-gray-300">It's a game to find the "wolf" who has been given a different word from everyone else (the "citizens"). Use discussion to find the person who doesn't quite fit in!</p>
+                                </div>
+                                <div>
+                                    <h2 class="text-xl font-bold mb-2 text-violet-400">Game Flow</h2>
+                                    <ol class="list-decimal rules-list space-y-2 text-gray-300">
+                                        <li><b>Setup:</b> The host sets the game rules in the waiting room.</li>
+                                        <li><b>Check Word:</b> Secretly check your assigned word. You won't be told your role!</li>
+                                        <li><b>Talk Time:</b> Discuss the topic to find the wolf.</li>
+                                        <li><b>Question Time:</b> One by one, ask another player a question that must be answered with "Yes" or "No".</li>
+                                        <li><b>Final Talk Time:</b> One last chance to discuss before the vote.</li>
+                                        <li><b>Vote:</b> Select a player and confirm your vote.</li>
+                                        <li><b>Result:</b> See who was eliminated and if the game ends!</li>
+                                    </ol>
+                                </div>
+                                <div>
+                                    <h2 class="text-xl font-bold mb-2 text-violet-400">Credits</h2>
+                                    <div class="text-gray-400 text-sm text-center space-y-1">
+                                        <p>Game Director: Kei</p>
+                                        <p>Development: KY</p>
+                                        <p>Development Support: Gemini</p>
+                                    </div>
+                                </div>
+                                <button id="back-to-home-btn" class="btn btn-primary w-full mt-4">Back</button>
+                            </div>
+                        </div>
+                    </div>
+                `;
+            }
+
+            getWaitingRoomHTML(room) {
+                const isHost = room.hostId === this.localState.userId;
+                const sortedPlayers = Object.values(room.players).sort((a, b) => a.joinedAt - b.joinedAt);
+                const playersHTML = sortedPlayers.map(p => `<span class="p-2 rounded-full bg-gray-700">${p.name} ${p.isHost ? '👑' : ''}</span>`).join('');
+                const topicNames = room.settings.language === 'ja' ? TOPIC_NAMES_JA : TOPIC_NAMES_EN;
+                const topicOptionsHTML = Object.keys(topicNames).map(key => `<option value="${key}">${topicNames[key]}</option>`).join('');
+
+                return `
+                    <div class="screen">
+                        <div class="card text-center">
+                            <p class="text-gray-300">Room ID</p>
+                            <div class="bg-gray-900 p-3 rounded-md font-mono text-2xl tracking-widest my-2 cursor-pointer" id="room-id-display">${room.id}</div>
+                            <p id="copy-feedback" class="text-sm text-green-400 h-4"></p>
+                            <h2 class="text-xl font-bold mt-6 mb-3">Players (${Object.keys(room.players).length})</h2>
+                            <div class="flex flex-wrap justify-center gap-2 mb-6">${playersHTML}</div>
+                            ${isHost ? `
+                                <div class="text-left space-y-4 mt-4 border-t border-gray-700 pt-4">
+                                    <div>
+                                        <label for="language" class="font-medium">Language</label>
+                                        <select id="language" class="form-select">
+                                            <option value="en" ${room.settings.language === 'en' ? 'selected' : ''}>English</option>
+                                            <option value="ja" ${room.settings.language === 'ja' ? 'selected' : ''}>日本語</option>
+                                        </select>
+                                    </div>
+                                    <div class="grid grid-cols-2 gap-4">
+                                        <div><label for="wolf-count" class="font-medium">Wolf Count</label><input id="wolf-count" type="number" class="form-input" value="${room.settings.wolfCount}" min="1"></div>
+                                        <div><label for="turn-count" class="font-medium">Rounds</label><input id="turn-count" type="number" class="form-input" value="${room.settings.turnCount}" min="1" max="5"></div>
+                                        <div><label for="talk-time" class="font-medium">Talk Time (sec)</label><input id="talk-time" type="number" class="form-input" value="${room.settings.talkTime}" min="10"></div>
+                                        <div><label for="final-talk-time" class="font-medium">Final Talk (sec)</label><input id="final-talk-time" type="number" class="form-input" value="${room.settings.finalTalkTime}" min="10"></div>
+                                        <div><label for="voting-time" class="font-medium">Voting Time (sec)</label><input id="voting-time" type="number" class="form-input" value="${room.settings.votingTime}" min="10"></div>
+                                    </div>
+                                    <div>
+                                        <label for="topic" class="font-medium">Topic</label>
+                                        <select id="topic" class="form-select">
+                                            <option value="ai_choice" ${room.settings.topic === 'ai_choice' ? 'selected' : ''}>AI Choice</option>
+                                            ${Object.keys(topicNames).map(key => `<option value="${key}" ${room.settings.topic === key ? 'selected' : ''}>${topicNames[key]}</option>`).join('')}
+                                            <option value="custom" ${room.settings.topic === 'custom' ? 'selected' : ''}>Custom</option>
+                                        </select>
+                                    </div>
+                                    <!-- AI Choice Area -->
+                                    <div id="ai-choice-area" class="hidden space-y-2">
+                                        <label for="ai-category" class="font-medium">Select a category for AI</label>
+                                        <select id="ai-category" class="form-select">${topicOptionsHTML}</select>
+                                        <button id="generate-ai-btn" class="btn btn-secondary w-full">Generate with AI</button>
+                                        <div id="ai-result-area" class="text-center p-2"></div>
+                                    </div>
+                                    <!-- Custom Topic Area -->
+                                    <div id="custom-topic-area" class="hidden space-y-2">
+                                        <label for="custom-category-name" class="font-medium">Custom Category Name</label>
+                                        <input id="custom-category-name" type="text" class="form-input" placeholder="e.g., Marvel Superheroes">
+                                        <label for="custom-word-list" class="font-medium">Word List (comma separated)</label>
+                                        <textarea id="custom-word-list" class="form-textarea" rows="3" placeholder="e.g., Iron Man, Captain America, Thor, Hulk"></textarea>
+                                    </div>
+                                </div>
+                                <button id="start-game-btn" class="btn btn-primary w-full mt-6">Start Game</button>
+                            ` : '<p class="text-gray-300 mt-6">Waiting for the host to start the game...</p>'}
+                        </div>
+                    </div>
+                `;
+            }
+
+            getRoleAssignmentHTML(room) {
+                const me = room.players[this.localState.userId];
+                return `
+                    <div class="screen">
+                        <div class="card text-center">
+                            <p class="text-gray-300 mt-6">Your Word is</p>
+                            <p class="text-4xl font-bold text-violet-400 my-4">${me.word}</p>
+                            <button id="ack-word-btn" class="btn btn-primary w-full">I Understand</button>
+                        </div>
+                    </div>
+                `;
+            }
+
+            getTalkTimeHTML(room) {
+                const sortedPlayers = Object.values(room.players).sort((a, b) => a.joinedAt - b.joinedAt);
+                const playersHTML = sortedPlayers.map(p => {
+                    const isEliminated = p.isEliminated ? 'line-through opacity-50' : '';
+                    return `<span class="p-2 rounded-full bg-gray-700 ${isEliminated}">${p.name}</span>`;
+                }).join('');
+                const title = room.gameState === 'final_talk_time' ? 'Final Talk Time' : 'Talk Time';
+                return `
+                    <div class="screen">
+                        <div class="card text-center w-full max-w-2xl">
+                            <p class="text-2xl font-bold mb-4">${title} (Round ${room.currentTurn})</p>
+                            <div id="timer-display" class="timer text-violet-400 mb-6">00:00</div>
+                            <p class="font-medium mb-2">Participants</p>
+                            <div class="flex flex-wrap justify-center gap-2">${playersHTML}</div>
+                        </div>
+                    </div>
+                `;
+            }
+
+            getQuestionTimeHTML(room) {
+                const questionerId = room.questionerOrder[room.currentQuestionerIndex];
+                const questioner = room.players[questionerId];
+                const isMyTurn = questionerId === this.localState.userId;
+
+                return `
+                    <div class="screen">
+                        <div class="card text-center">
+                            <h2 class="text-3xl font-bold mb-4">Question Time</h2>
+                            <p class="text-gray-300 mb-6">It's <span class="font-bold text-violet-400">${questioner.name}'s</span> turn to ask a question.</p>
+                            ${isMyTurn ? `
+                                <p class="mb-4">Ask one person a question, or skip your turn.</p>
+                                <div class="flex gap-4">
+                                    <button id="next-questioner-btn" class="btn btn-primary w-full">Next Questioner</button>
+                                    <button id="skip-question-btn" class="btn btn-secondary w-full">Skip</button>
+                                </div>
+                            ` : ''}
+                        </div>
+                    </div>
+                `;
+            }
+
+            getVotingHTML(room) {
+                const me = room.players[this.localState.userId];
+                const isHost = room.hostId === this.localState.userId;
+
+                if (me.isEliminated || (room.votes && room.votes[this.localState.userId])) {
+                    return `<div class="screen"><div class="card text-center"><p class="text-xl">Vote complete. Waiting for others...</p></div></div>`;
+                }
+                const sortedPlayers = Object.values(room.players).sort((a, b) => a.joinedAt - b.joinedAt);
+                const voteButtonsHTML = sortedPlayers
+                    .filter(p => !p.isEliminated)
+                    .map(p => `<button class="btn btn-secondary w-full" data-vote-id="${p.id}" data-vote-name="${p.name}" ${p.id === this.localState.userId ? 'disabled' : ''}>${p.name}</button>`)
+                    .join('');
+                return `
+                    <div class="screen">
+                        <div class="card text-center">
+                            <h2 class="text-3xl font-bold mb-4">Vote Time (Round ${room.currentTurn})</h2>
+                            <div id="timer-display" class="timer text-violet-400 mb-4">00:00</div>
+                            <p class="text-gray-300 mb-6">Who do you think is the Wolf?</p>
+                            <div id="vote-buttons-container" class="grid grid-cols-2 sm:grid-cols-3 gap-3">${voteButtonsHTML}</div>
+                            ${isHost ? `<div class="mt-6 text-lg border-t border-gray-700 pt-4">Voted: <span id="voted-count">0</span> / <span id="total-voters">0</span></div>` : ''}
+                            <div id="vote-confirmation-area" class="hidden mt-6 space-y-4 border-t border-gray-700 pt-4">
+                                <p id="vote-confirm-text" class="text-lg"></p>
+                                <div class="flex gap-4">
+                                    <button id="confirm-vote-btn" class="btn btn-primary w-full">Confirm</button>
+                                    <button id="cancel-vote-btn" class="btn btn-secondary w-full">Cancel</button>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                `;
+            }
+
+            getResultsHTML(room) {
+                const eliminatedPlayer = Object.values(room.players).find(p => p.id === room.lastEliminatedId);
+                let resultText = "The vote was a tie. No one was eliminated.";
+                let roleRevealHTML = '';
+                if (eliminatedPlayer) {
+                    resultText = `${eliminatedPlayer.name} has been voted out.`;
+                    const roleColor = eliminatedPlayer.role === 'wolf' ? 'text-red-500' : 'text-blue-500';
+                    roleRevealHTML = `<p class="text-xl">${eliminatedPlayer.name} was a <span class="font-bold ${roleColor}">${eliminatedPlayer.role}</span>.</p>`;
+                }
+                const isHost = room.hostId === this.localState.userId;
+                return `
+                    <div class="screen">
+                        <div class="card text-center">
+                            <h2 class="text-3xl font-bold mb-4">Vote Results</h2>
+                            <p class="text-xl mb-6">${resultText}</p>
+                            ${roleRevealHTML}
+                            ${isHost ? '<button id="next-round-btn" class="btn btn-primary w-full mt-6">Continue</button>' : '<p class="text-gray-300 mt-6">Waiting for the host to continue...</p>'}
+                        </div>
+                    </div>
+                `;
+            }
+
+            getWolfGuessHTML(room) {
+                const guessingWolf = room.players[room.lastEliminatedId];
+                const isMyTurn = this.localState.userId === guessingWolf.id;
+                return `
+                    <div class="screen">
+                        <div class="card text-center">
+                            <h2 class="text-3xl font-bold mb-2">Wolf's Final Guess!</h2>
+                            <p class="text-gray-300 mb-6">${guessingWolf.name}, guess the Citizen's word for a comeback victory!</p>
+                            ${isMyTurn ? `
+                                <input id="wolf-guess-input" type="text" class="form-input text-center mb-4" placeholder="Enter Citizen's word">
+                                <button id="submit-guess-btn" class="btn btn-primary w-full">Submit Guess</button>
+                            ` : `<p>Waiting for ${guessingWolf.name} to guess...</p>`}
+                        </div>
+                    </div>
+                `;
+            }
+
+            getEndGameHTML(room) {
+                return `
+                    <div class="screen">
+                        <div class="card text-center">
+                            <h2 class="text-4xl font-bold ${room.winner === 'citizens' ? 'text-blue-500' : 'text-red-500'}">${room.winner.charAt(0).toUpperCase() + room.winner.slice(1)} Win!</h2>
+                            <p class="my-6">The words were:</p>
+                            <div class="text-lg bg-gray-900 p-4 rounded-lg">
+                                <p>Citizen: <span class="font-bold">${room.words.citizen}</span></p>
+                                <p>Wolf: <span class="font-bold">${room.words.wolf}</span></p>
+                            </div>
+                            ${room.hostId === this.localState.userId ? '<button id="play-again-btn" class="btn btn-primary w-full mt-6">Play Again</button>' : '<p class="text-gray-300 mt-6">Waiting for the host...</p>'}
+                        </div>
+                    </div>
+                `;
+            }
+            
+            // --- EVENT LISTENERS ---
+
+            /**
+             * Attaches event listeners for the home screen.
+             */
+            addHomeListeners() {
+                document.getElementById('create-room-btn').addEventListener('click', () => this.createRoom());
+                document.getElementById('join-room-btn').addEventListener('click', () => this.joinRoom(null));
+                document.getElementById('show-rules-btn').addEventListener('click', () => {
+                    this.render(this.getRulesAndCreditsHTML());
+                    document.getElementById('back-to-home-btn').addEventListener('click', () => {
+                        this.renderHomeScreen();
+                    });
+                });
+            }
+            
+            // ... (All other add...Listeners methods would be here) ...
+            addWaitingRoomListeners(room) {
+                if (this.localState.isHost) {
+                    const settingsToWatch = ['language', 'wolf-count', 'turn-count', 'talk-time', 'final-talk-time', 'voting-time', 'topic'];
+                    settingsToWatch.forEach(id => {
+                        const el = document.getElementById(id);
+                        if (el) el.addEventListener('change', () => this.updateSettings(room.id));
+                    });
+                    
+                    document.getElementById('start-game-btn').addEventListener('click', () => this.startGame(room));
+                    document.getElementById('generate-ai-btn').addEventListener('click', () => this.handleAiGeneration());
+                    
+                    const topicSelect = document.getElementById('topic');
+                    topicSelect.addEventListener('change', () => {
+                        const customArea = document.getElementById('custom-topic-area');
+                        const aiArea = document.getElementById('ai-choice-area');
+                        if (topicSelect.value === 'custom') {
+                            customArea.classList.remove('hidden');
+                            aiArea.classList.add('hidden');
+                        } else if (topicSelect.value === 'ai_choice') {
+                            customArea.classList.add('hidden');
+                            aiArea.classList.remove('hidden');
+                        } else {
+                            customArea.classList.add('hidden');
+                            aiArea.classList.add('hidden');
                         }
                     });
+                    topicSelect.dispatchEvent(new Event('change'));
                 }
+                document.getElementById('room-id-display').addEventListener('click', (e) => {
+                    navigator.clipboard.writeText(room.id);
+                    document.getElementById('copy-feedback').textContent = 'Copied!';
+                    setTimeout(() => { if(document.getElementById('copy-feedback')) document.getElementById('copy-feedback').textContent = '' }, 2000);
+                });
+            }
 
-                function addWolfGuessListeners(room) {
-                    if (localState.userId !== room.lastEliminatedId) return;
-                    document.getElementById('submit-guess-btn').addEventListener('click', async () => {
-                        const guess = document.getElementById('wolf-guess-input').value.trim();
-                        const roomRef = getRoomRef(room.id);
-                        if (guess.toLowerCase() === room.words.citizen.toLowerCase()) {
-                            await updateDoc(roomRef, { gameState: 'end_game', winner: 'wolves' });
+            addRoleAssignmentListeners(room) {
+                document.getElementById('ack-word-btn').addEventListener('click', () => this.handleAcknowledgement(room));
+            }
+
+            addQuestionTimeListeners(room) {
+                const isMyTurn = room.questionerOrder[room.currentQuestionerIndex] === this.localState.userId;
+                if (isMyTurn) {
+                    document.getElementById('next-questioner-btn').addEventListener('click', () => this.handleQuestionTurn(room));
+                    document.getElementById('skip-question-btn').addEventListener('click', () => this.handleQuestionTurn(room));
+                }
+            }
+            
+            addVotingListeners(room) {
+                if (room.players[this.localState.userId]?.isEliminated || (room.votes && room.votes[this.localState.userId])) return;
+                
+                let selectedVoteId = null;
+                const confirmationArea = document.getElementById('vote-confirmation-area');
+                const confirmText = document.getElementById('vote-confirm-text');
+                const confirmBtn = document.getElementById('confirm-vote-btn');
+                const cancelBtn = document.getElementById('cancel-vote-btn');
+
+                document.querySelectorAll('[data-vote-id]').forEach(button => {
+                    button.addEventListener('click', (e) => {
+                        selectedVoteId = e.currentTarget.dataset.voteId;
+                        const selectedName = e.currentTarget.dataset.voteName;
+                        
+                        document.querySelectorAll('[data-vote-id]').forEach(btn => btn.disabled = true);
+                        e.currentTarget.classList.remove('btn-secondary');
+                        e.currentTarget.classList.add('btn-primary');
+
+                        confirmText.textContent = `Vote for ${selectedName}?`;
+                        confirmationArea.classList.remove('hidden');
+                    });
+                });
+
+                cancelBtn.addEventListener('click', () => {
+                    selectedVoteId = null;
+                    document.querySelectorAll('[data-vote-id]').forEach(btn => {
+                        btn.disabled = (btn.dataset.voteId === this.localState.userId);
+                        btn.classList.remove('btn-primary');
+                        btn.classList.add('btn-secondary');
+                    });
+                    confirmationArea.classList.add('hidden');
+                });
+
+                confirmBtn.addEventListener('click', () => {
+                    if (selectedVoteId) {
+                        this.render(`<div class="screen"><div class="card text-center"><p class="text-xl">You have voted. Waiting for others...</p></div></div>`);
+                        this.handleVote(selectedVoteId);
+                    }
+                });
+            }
+
+            addResultsListeners(room) {
+                if (!this.localState.isHost) return;
+                document.getElementById('next-round-btn').addEventListener('click', async () => {
+                    const roomRef = this.getRoomRef(room.id);
+                    const remainingPlayers = Object.values(room.players).filter(p => !p.isEliminated);
+                    const remainingWolves = remainingPlayers.filter(p => p.role === 'wolf').length;
+                    const remainingCitizens = remainingPlayers.length - remainingWolves;
+                    const currentTurn = room.currentTurn || 1;
+                    const maxTurns = room.settings.turnCount || 1;
+
+                    if (remainingWolves === 0) {
+                        if (room.lastEliminatedId && room.players[room.lastEliminatedId].role === 'wolf' && room.settings.wolfCount === 1) {
+                            await updateDoc(roomRef, { gameState: 'wolf_guess' });
                         } else {
                             await updateDoc(roomRef, { gameState: 'end_game', winner: 'citizens' });
                         }
-                    });
-                }
-
-                function addEndGameListeners(room) {
-                    if (!localState.isHost) return;
-                    document.getElementById('play-again-btn').addEventListener('click', async () => {
-                        const roomRef = getRoomRef(room.id);
-                        const playersReset = {};
-                        Object.keys(room.players).forEach(id => {
-                            playersReset[id] = { name: room.players[id].name, isHost: room.players[id].isHost, joinedAt: room.players[id].joinedAt };
+                    } 
+                    else if (remainingWolves >= remainingCitizens) {
+                        await updateDoc(roomRef, { gameState: 'end_game', winner: 'wolves' });
+                    } 
+                    else if (currentTurn >= maxTurns) {
+                        await updateDoc(roomRef, { gameState: 'end_game', winner: 'wolves' });
+                    } 
+                    else {
+                        const talkTimeInSeconds = room.settings.talkTime || 180;
+                        const phaseEndTime = new Date(Date.now() + talkTimeInSeconds * 1000);
+                        const newQuestionerOrder = remainingPlayers.map(p => p.id).sort(() => 0.5 - Math.random());
+                        await updateDoc(roomRef, { 
+                            gameState: 'talk_time', phaseEndTime, lastEliminatedId: null,
+                            currentTurn: currentTurn + 1, questionerOrder: newQuestionerOrder, currentQuestionerIndex: 0
                         });
-                        await updateDoc(roomRef, {
-                            gameState: 'waiting', players: playersReset, lastEliminatedId: null, winner: null,
-                            words: null, currentTurn: null, questionerOrder: null, currentQuestionerIndex: null,
-                        });
-                    });
-                }
-
-                // --- Initial Load & Auth ---
-                onAuthStateChanged(auth, async (user) => {
-                    if (user) {
-                        localState.userId = user.uid;
-                        const pathRoomId = window.location.pathname.split('/room/')[1];
-                        const savedRoomId = localStorage.getItem('wordWolfRoomId');
-
-                        if(pathRoomId) { await joinRoom(pathRoomId.toUpperCase()); } 
-                        else if (savedRoomId) {
-                            showRejoinPrompt(savedRoomId,
-                                () => { joinRoom(savedRoomId); },
-                                () => { localStorage.removeItem('wordWolfRoomId'); renderHomeScreen(); }
-                            );
-                        } else { renderHomeScreen(); }
-                    } else { await signInAnonymously(auth); }
-                });
-
-                function renderHomeScreen() {
-                    render(getHomeScreenHTML());
-                    addHomeListeners();
-                    if(localState.userId) document.getElementById('user-id-display').textContent = localState.userId;
-                }
-
-                // --- Helper Functions ---
-                async function createRoom() {
-                    if (!validatePlayerName()) return;
-                    localState.isHost = true;
-                    const roomId = Math.random().toString(36).substring(2, 8).toUpperCase();
-                    window.history.pushState({}, '', `/room/${roomId}`);
-                    const roomRef = getRoomRef(roomId);
-                    const newPlayer = { [localState.userId]: { name: localState.playerName, isHost: true, joinedAt: Date.now() } };
-                    await setDoc(roomRef, {
-                        id: roomId, hostId: localState.userId, gameState: 'waiting', players: newPlayer,
-                        settings: { wolfCount: 1, topic: 'ai_choice', language: 'en', turnCount: 1, talkTime: 180, finalTalkTime: 60, votingTime: 30 }
-                    });
-                    localState.roomId = roomId;
-                    localStorage.setItem('wordWolfRoomId', roomId);
-                    attachRoomListener(roomId);
-                }
-
-                async function joinRoom(roomIdFromUrl) {
-                    let roomId = roomIdFromUrl;
-                    if (!roomId) {
-                        const joinId = document.getElementById('join-room-id-input').value.trim().toUpperCase();
-                         if(!joinId) { showMessage('Please enter a Room ID.'); return; }
-                         roomId = joinId;
                     }
-                    if (!validatePlayerName()) return;
-                    
-                    const roomRef = getRoomRef(roomId);
-                    const roomSnap = await getDoc(roomRef);
-
-                    if (!roomSnap.exists()) {
-                        showMessage("Room not found!");
-                        localStorage.removeItem('wordWolfRoomId');
-                        return;
-                    }
-                    
-                    window.history.pushState({}, '', `/room/${roomId}`);
-                    const newPlayerData = { name: localState.playerName, isHost: roomSnap.data().hostId === localState.userId, joinedAt: Date.now() };
-                    await updateDoc(roomRef, { [`players.${localState.userId}`]: newPlayerData });
-                    
-                    localState.roomId = roomId;
-                    localStorage.setItem('wordWolfRoomId', roomId);
-                    attachRoomListener(roomId);
-                }
-
-                function validatePlayerName() {
-                    const nameInput = document.getElementById('player-name-input');
-                    if(!nameInput) return true;
-                    const playerName = nameInput.value.trim();
-                    if (!playerName) { showMessage('Please enter your name.'); return false; }
-                    localState.playerName = playerName;
-                    localStorage.setItem('playerName', playerName);
-                    return true;
-                }
-                
-                async function updateSettings(roomId) {
-                    const roomRef = getRoomRef(roomId);
-                    await updateDoc(roomRef, {
-                        "settings.wolfCount": parseInt(document.getElementById('wolf-count').value) || 1,
-                        "settings.turnCount": parseInt(document.getElementById('turn-count').value) || 1,
-                        "settings.talkTime": parseInt(document.getElementById('talk-time').value) || 180,
-                        "settings.finalTalkTime": parseInt(document.getElementById('final-talk-time').value) || 60,
-                        "settings.votingTime": parseInt(document.getElementById('voting-time').value) || 30,
-                        "settings.topic": document.getElementById('topic').value,
-                        "settings.language": document.getElementById('language').value,
-                    });
-                }
-
-                async function handleAiGeneration() {
-                    const categorySelect = document.getElementById('ai-category');
-                    const categoryName = categorySelect.options[categorySelect.selectedIndex].text;
-                    const resultArea = document.getElementById('ai-result-area');
-                    const generateBtn = document.getElementById('generate-ai-btn');
-
-                    resultArea.innerHTML = '<div class="loader"></div>';
-                    generateBtn.disabled = true;
-                    localState.aiGeneratedPair = null;
-
-                    const prompt = `For the game 'Word Wolf', generate a single, clever pair of words from the category '${categoryName}'. The words should be very similar but have a subtle difference. Respond with only the two words separated by a comma, without any extra text or formatting. For example: Curry,Stew`;
-                    
-                    try {
-                        const apiKey = ""; // Provided by environment
-                        const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-preview-05-20:generateContent?key=${apiKey}`;
-                        const payload = { contents: [{ parts: [{ text: prompt }] }] };
-
-                        const response = await fetch(apiUrl, {
-                            method: 'POST',
-                            headers: { 'Content-Type': 'application/json' },
-                            body: JSON.stringify(payload)
-                        });
-
-                        if (!response.ok) throw new Error(`API Error: ${response.statusText}`);
-
-                        const result = await response.json();
-                        const text = result.candidates[0].content.parts[0].text;
-                        const pair = text.split(',').map(w => w.trim());
-
-                        if (pair.length !== 2) throw new Error("AI did not return a valid pair.");
-
-                        localState.aiGeneratedPair = pair;
-                        resultArea.innerHTML = `<p class="text-green-400">Generated: <span class="font-bold">${pair[0]}</span> & <span class="font-bold">${pair[1]}</span></p>`;
-
-                    } catch (error) {
-                        console.error("AI Generation Error:", error);
-                        resultArea.innerHTML = `<p class="text-red-400">Failed to generate. Please try again.</p>`;
-                    } finally {
-                        generateBtn.disabled = false;
-                    }
-                }
-
-            } catch (error) {
-                console.error("Initialization Error:", error);
-                showMessage(`Error: ${error.message}`, () => {
-                    window.location.href = '/';
                 });
             }
+
+            addWolfGuessListeners(room) {
+                if (this.localState.userId !== room.lastEliminatedId) return;
+                document.getElementById('submit-guess-btn').addEventListener('click', async () => {
+                    const guess = document.getElementById('wolf-guess-input').value.trim();
+                    const roomRef = this.getRoomRef(room.id);
+                    if (guess.toLowerCase() === room.words.citizen.toLowerCase()) {
+                        await updateDoc(roomRef, { gameState: 'end_game', winner: 'wolves' });
+                    } else {
+                        await updateDoc(roomRef, { gameState: 'end_game', winner: 'citizens' });
+                    }
+                });
+            }
+
+            addEndGameListeners(room) {
+                if (!this.localState.isHost) return;
+                document.getElementById('play-again-btn').addEventListener('click', async () => {
+                    const roomRef = this.getRoomRef(room.id);
+                    const playersReset = {};
+                    Object.keys(room.players).forEach(id => {
+                        playersReset[id] = { name: room.players[id].name, isHost: room.players[id].isHost, joinedAt: room.players[id].joinedAt };
+                    });
+                    await updateDoc(roomRef, {
+                        gameState: 'waiting', players: playersReset, lastEliminatedId: null, winner: null,
+                        words: null, currentTurn: null, questionerOrder: null, currentQuestionerIndex: null,
+                    });
+                });
+            }
+
+
+            // --- GAME LOGIC & FIRESTORE INTERACTIONS ---
+
+            getRoomRef(roomId) {
+                return doc(this.db, "rooms", roomId);
+            }
+
+            /**
+             * Attaches a real-time listener to the current game room.
+             * @param {string} roomId - The ID of the room to listen to.
+             */
+            attachRoomListener(roomId) {
+                this.localState.roomId = roomId;
+                if (this.localState.roomUnsubscribe) this.localState.roomUnsubscribe();
+                
+                const roomRef = this.getRoomRef(roomId);
+                this.localState.roomUnsubscribe = onSnapshot(roomRef, (doc) => {
+                    const roomData = doc.data();
+                    if (!roomData) {
+                        if (this.localState.roomUnsubscribe) this.localState.roomUnsubscribe();
+                        localStorage.removeItem('wordWolfRoomId');
+                        this.showMessage("The host has closed the room.", () => { window.location.href = '/'; });
+                        return;
+                    }
+
+                    this.localState.isHost = roomData.hostId === this.localState.userId;
+                    
+                    if (this.localState.timerInterval && !['talk_time', 'final_talk_time', 'voting'].includes(roomData.gameState)) {
+                        clearInterval(this.localState.timerInterval);
+                    }
+
+                    // Host-only logic to check if all votes are in
+                    if (this.localState.isHost && roomData.gameState === 'voting') {
+                        const activePlayers = Object.values(roomData.players).filter(p => !p.isEliminated);
+                        const votes = roomData.votes || {};
+                        if (Object.keys(votes).length >= activePlayers.length) {
+                            this.handleVoteTally(roomData);
+                        }
+                    }
+
+                    // Main game state router
+                    this.routeGameState(roomData);
+                });
+            }
+
+            /**
+             * Routes the game to the correct UI and logic based on the current gameState.
+             * @param {object} roomData - The current data of the room from Firestore.
+             */
+            routeGameState(roomData) {
+                 switch (roomData.gameState) {
+                    case 'waiting': 
+                        this.render(this.getWaitingRoomHTML(roomData)); 
+                        this.addWaitingRoomListeners(roomData); 
+                        break;
+                    case 'role_assignment':
+                        const me = roomData.players[this.localState.userId];
+                        if (me && me.acknowledged) {
+                            this.render(`<div class="screen"><div class="card text-center"><p class="text-xl">Waiting for other players to confirm...</p></div></div>`);
+                        } else {
+                            this.render(this.getRoleAssignmentHTML(roomData)); 
+                            this.addRoleAssignmentListeners(roomData);
+                        }
+                        break;
+                    case 'talk_time':
+                    case 'final_talk_time': 
+                        this.render(this.getTalkTimeHTML(roomData)); 
+                        this.handlePhaseTimer(roomData); 
+                        break;
+                    case 'question_time': 
+                        this.render(this.getQuestionTimeHTML(roomData)); 
+                        this.addQuestionTimeListeners(roomData); 
+                        break;
+                    case 'voting': 
+                        this.render(this.getVotingHTML(roomData)); 
+                        this.addVotingListeners(roomData); 
+                        this.handlePhaseTimer(roomData); 
+                        break;
+                    case 'results': 
+                        this.render(this.getResultsHTML(roomData)); 
+                        this.addResultsListeners(roomData); 
+                        break;
+                    case 'wolf_guess': 
+                        this.render(this.getWolfGuessHTML(roomData)); 
+                        this.addWolfGuessListeners(roomData); 
+                        break;
+                    case 'end_game':
+                        localStorage.removeItem('wordWolfRoomId');
+                        this.render(this.getEndGameHTML(roomData)); 
+                        this.addEndGameListeners(roomData); 
+                        break;
+                }
+            }
+            
+            // ... (All other game logic methods: createRoom, joinRoom, startGame, etc.) ...
+            async createRoom() {
+                if (!this.validatePlayerName()) return;
+                this.localState.isHost = true;
+                const roomId = Math.random().toString(36).substring(2, 8).toUpperCase();
+                window.history.pushState({}, '', `/room/${roomId}`);
+                const roomRef = this.getRoomRef(roomId);
+                const newPlayer = { [this.localState.userId]: { name: this.localState.playerName, isHost: true, joinedAt: Date.now() } };
+                await setDoc(roomRef, {
+                    id: roomId, hostId: this.localState.userId, gameState: 'waiting', players: newPlayer,
+                    settings: { wolfCount: 1, topic: 'ai_choice', language: 'en', turnCount: 1, talkTime: 180, finalTalkTime: 60, votingTime: 30 }
+                });
+                this.localState.roomId = roomId;
+                localStorage.setItem('wordWolfRoomId', roomId);
+                this.attachRoomListener(roomId);
+            }
+
+            async joinRoom(roomIdFromUrl) {
+                let roomId = roomIdFromUrl;
+                if (!roomId) {
+                    const joinIdInput = document.getElementById('join-room-id-input');
+                    if (joinIdInput) {
+                        const joinId = joinIdInput.value.trim().toUpperCase();
+                        if(!joinId) { this.showMessage('Please enter a Room ID.'); return; }
+                        roomId = joinId;
+                    } else {
+                        return; // Can't join without an ID
+                    }
+                }
+                if (!this.validatePlayerName()) return;
+                
+                const roomRef = this.getRoomRef(roomId);
+                const roomSnap = await getDoc(roomRef);
+
+                if (!roomSnap.exists()) {
+                    this.showMessage("Room not found!");
+                    localStorage.removeItem('wordWolfRoomId');
+                    return;
+                }
+                
+                window.history.pushState({}, '', `/room/${roomId}`);
+                const newPlayerData = { name: this.localState.playerName, isHost: roomSnap.data().hostId === this.localState.userId, joinedAt: Date.now() };
+                await updateDoc(roomRef, { [`players.${this.localState.userId}`]: newPlayerData });
+                
+                this.localState.roomId = roomId;
+                localStorage.setItem('wordWolfRoomId', roomId);
+                this.attachRoomListener(roomId);
+            }
+
+            async startGame(room) {
+                const roomRef = this.getRoomRef(room.id);
+                const players = room.players;
+                const settings = room.settings;
+                const playerIds = Object.keys(players);
+                
+                if (playerIds.length < 3) {
+                    this.showMessage("You need at least 3 players to start.");
+                    return;
+                }
+                
+                let wordPair;
+
+                try {
+                    if (settings.topic === 'custom') {
+                        const wordList = (document.getElementById('custom-word-list').value || '').split(',')
+                            .map(w => w.trim()).filter(w => w);
+                        if (wordList.length < 2) {
+                            this.showMessage("Custom topic needs at least 2 comma-separated words.");
+                            return;
+                        }
+                        const shuffled = wordList.sort(() => 0.5 - Math.random());
+                        wordPair = shuffled.slice(0, 2);
+                    } else if (settings.topic === 'ai_choice') {
+                        if (!this.localState.aiGeneratedPair) {
+                            this.showMessage("Please generate a word pair with AI first.");
+                            return;
+                        }
+                        wordPair = this.localState.aiGeneratedPair;
+                    } else {
+                        const topicData = settings.language === 'ja' ? TOPICS_JA : TOPICS_EN;
+                        wordPair = topicData[settings.topic][Math.floor(Math.random() * topicData[settings.topic].length)];
+                    }
+                } catch (error) {
+                    this.showMessage("Could not set up the words for the game. Please check the topic settings.");
+                    console.error(error);
+                    return;
+                }
+
+                const wolfCount = Math.max(1, Math.min(settings.wolfCount, playerIds.length - 1));
+                let roles = Array(playerIds.length).fill('citizen');
+                for(let i = 0; i < wolfCount; i++) roles[i] = 'wolf';
+                roles.sort(() => 0.5 - Math.random());
+                
+                const [wordA, wordB] = wordPair.sort(() => 0.5 - Math.random());
+                
+                const updatedPlayers = { ...players };
+                playerIds.forEach((id, index) => {
+                    updatedPlayers[id].role = roles[index];
+                    updatedPlayers[id].word = roles[index] === 'wolf' ? wordB : wordA;
+                    updatedPlayers[id].acknowledged = false;
+                });
+                
+                const questionerOrder = [...playerIds].sort(() => 0.5 - Math.random());
+                
+                await updateDoc(roomRef, {
+                    gameState: 'role_assignment',
+                    players: updatedPlayers,
+                    words: { citizen: wordA, wolf: wordB },
+                    currentTurn: 1,
+                    questionerOrder: questionerOrder,
+                    currentQuestionerIndex: 0,
+                    votes: {}
+                });
+            }
+
+            async handleAcknowledgement(room) {
+                const roomRef = this.getRoomRef(room.id);
+                await runTransaction(this.db, async (transaction) => {
+                    const roomSnap = await transaction.get(roomRef);
+                    if (!roomSnap.exists()) { throw "Room does not exist!"; }
+                    
+                    const currentRoom = roomSnap.data();
+                    const updatedPlayers = { ...currentRoom.players };
+                    if(updatedPlayers[this.localState.userId]) {
+                       updatedPlayers[this.localState.userId].acknowledged = true;
+                    }
+                    
+                    transaction.update(roomRef, { players: updatedPlayers });
+
+                    const allAckd = Object.values(updatedPlayers).every(p => p.acknowledged);
+                    if (allAckd) {
+                        const talkTimeInSeconds = currentRoom.settings.talkTime || 180;
+                        const phaseEndTime = new Date(Date.now() + talkTimeInSeconds * 1000);
+                        transaction.update(roomRef, { 
+                            gameState: 'talk_time',
+                            phaseEndTime: phaseEndTime
+                        });
+                    }
+                });
+            }
+
+            async handleQuestionTurn(room) {
+                const roomRef = this.getRoomRef(room.id);
+                const nextIndex = room.currentQuestionerIndex + 1;
+                
+                if (nextIndex >= room.questionerOrder.length) {
+                    const finalTalkTimeInSeconds = room.settings.finalTalkTime || 60;
+                    const phaseEndTime = new Date(Date.now() + finalTalkTimeInSeconds * 1000);
+                    await updateDoc(roomRef, { gameState: 'final_talk_time', phaseEndTime: phaseEndTime });
+                } else {
+                    await updateDoc(roomRef, { currentQuestionerIndex: nextIndex });
+                }
+            }
+
+            async handleVote(votedId) {
+                const roomRef = this.getRoomRef(this.localState.roomId);
+                await updateDoc(roomRef, {
+                    [`votes.${this.localState.userId}`]: votedId
+                });
+            }
+
+            async handleVoteTally(room) {
+                const roomRef = this.getRoomRef(room.id);
+                await runTransaction(this.db, async (transaction) => {
+                    const freshRoomSnap = await transaction.get(roomRef);
+                    if (!freshRoomSnap.exists() || freshRoomSnap.data().gameState !== 'voting') {
+                        return; // The state has changed, so stop this transaction.
+                    }
+                    const roomData = freshRoomSnap.data();
+                    const players = roomData.players;
+                    const votes = roomData.votes || {};
+                    
+                    // 1. Tally the votes for each player.
+                    const voteCounts = {};
+                    Object.values(votes).forEach(votedForId => {
+                        voteCounts[votedForId] = (voteCounts[votedForId] || 0) + 1;
+                    });
+
+                    // 2. Determine the player(s) with the most votes from the active players.
+                    let maxVotes = 0;
+                    let mostVotedIds = [];
+                    const activePlayers = Object.values(players).filter(p => !p.isEliminated);
+
+                    activePlayers.forEach(player => {
+                        const count = voteCounts[player.id] || 0; // Get vote count, default to 0 if no votes.
+                        
+                        if (count > maxVotes) {
+                            maxVotes = count;
+                            mostVotedIds = [player.id]; // New leader, reset the list.
+                        } else if (count === maxVotes) {
+                            mostVotedIds.push(player.id); // It's a tie, add to the list.
+                        }
+                    });
+
+                    // 3. Determine the outcome.
+                    let lastEliminatedId = null;
+                    const updatedPlayers = { ...players };
+                    // A single player is eliminated only if they are the sole person with the most votes,
+                    // and the number of votes is greater than 0.
+                    if (mostVotedIds.length === 1 && maxVotes > 0) {
+                        lastEliminatedId = mostVotedIds[0];
+                        if (updatedPlayers[lastEliminatedId]) {
+                            updatedPlayers[lastEliminatedId].isEliminated = true;
+                        }
+                    }
+                    
+                    // 4. Update the room state in Firestore.
+                    transaction.update(roomRef, { 
+                        gameState: 'results', 
+                        lastEliminatedId: lastEliminatedId, 
+                        players: updatedPlayers,
+                        votes: {} // Clear votes for the next round.
+                    });
+                });
+            }
+
+            handlePhaseTimer(room) {
+                if (this.localState.timerInterval) clearInterval(this.localState.timerInterval);
+                const timerDisplay = document.getElementById('timer-display');
+                if (!timerDisplay) return;
+
+                const votedCountEl = document.getElementById('voted-count');
+                const totalVotersEl = document.getElementById('total-voters');
+
+                this.localState.timerInterval = setInterval(async () => {
+                    if (!room.phaseEndTime) { clearInterval(this.localState.timerInterval); return; }
+
+                    const serverTime = room.phaseEndTime.toMillis();
+                    const remaining = Math.max(0, Math.round((serverTime - Date.now()) / 1000));
+                    const minutes = String(Math.floor(remaining / 60)).padStart(2, '0');
+                    const seconds = String(remaining % 60).padStart(2, '0');
+                    if (timerDisplay) timerDisplay.textContent = `${minutes}:${seconds}`;
+
+                    if (room.gameState === 'voting' && this.localState.isHost && votedCountEl) {
+                        const totalVoters = Object.values(room.players).filter(p => !p.isEliminated).length;
+                        const votedCount = Object.keys(room.votes || {}).length;
+                        votedCountEl.textContent = votedCount;
+                        totalVotersEl.textContent = totalVoters;
+                    }
+
+                    if (remaining <= 0 && this.localState.isHost) {
+                        clearInterval(this.localState.timerInterval);
+                        const roomRef = this.getRoomRef(room.id);
+                        const currentRoomSnap = await getDoc(roomRef);
+                        const currentRoom = currentRoomSnap.data();
+
+                        // Ensure we don't double-process if listener already caught it
+                        if (currentRoom.gameState !== room.gameState) return;
+
+                        switch (currentRoom.gameState) {
+                            case 'talk_time':
+                                await updateDoc(roomRef, { gameState: 'question_time' }); break;
+                            case 'final_talk_time':
+                                const votingTime = currentRoom.settings.votingTime || 30;
+                                const phaseEndTime = new Date(Date.now() + votingTime * 1000);
+                                await updateDoc(roomRef, { gameState: 'voting', phaseEndTime }); break;
+                            case 'voting':
+                                await this.handleVoteTally(currentRoom);
+                                break;
+                        }
+                    }
+                }, 500);
+            }
+            
+            // --- HELPER & UTILITY FUNCTIONS ---
+
+            validatePlayerName() {
+                const nameInput = document.getElementById('player-name-input');
+                if (!nameInput) return true;
+                const playerName = nameInput.value.trim();
+                if (!playerName) { this.showMessage('Please enter your name.'); return false; }
+                this.localState.playerName = playerName;
+                localStorage.setItem('playerName', playerName);
+                return true;
+            }
+
+            async updateSettings(roomId) {
+                const roomRef = this.getRoomRef(roomId);
+                await updateDoc(roomRef, {
+                    "settings.wolfCount": parseInt(document.getElementById('wolf-count').value) || 1,
+                    "settings.turnCount": parseInt(document.getElementById('turn-count').value) || 1,
+                    "settings.talkTime": parseInt(document.getElementById('talk-time').value) || 180,
+                    "settings.finalTalkTime": parseInt(document.getElementById('final-talk-time').value) || 60,
+                    "settings.votingTime": parseInt(document.getElementById('voting-time').value) || 30,
+                    "settings.topic": document.getElementById('topic').value,
+                    "settings.language": document.getElementById('language').value,
+                });
+            }
+
+            async handleAiGeneration() {
+                const categorySelect = document.getElementById('ai-category');
+                const categoryName = categorySelect.options[categorySelect.selectedIndex].text;
+                const resultArea = document.getElementById('ai-result-area');
+                const generateBtn = document.getElementById('generate-ai-btn');
+
+                resultArea.innerHTML = '<div class="loader"></div>';
+                generateBtn.disabled = true;
+                this.localState.aiGeneratedPair = null;
+
+                const prompt = `For the game 'Word Wolf', generate a single, clever pair of words from the category '${categoryName}'. The words should be very similar but have a subtle difference. Respond with only the two words separated by a comma, without any extra text or formatting. For example: Curry,Stew`;
+                
+                try {
+                    const apiKey = ""; // Provided by environment
+                    const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-preview-05-20:generateContent?key=${apiKey}`;
+                    const payload = { contents: [{ parts: [{ text: prompt }] }] };
+
+                    const response = await fetch(apiUrl, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify(payload)
+                    });
+
+                    if (!response.ok) throw new Error(`API Error: ${response.statusText}`);
+
+                    const result = await response.json();
+                    const text = result.candidates[0].content.parts[0].text;
+                    const pair = text.split(',').map(w => w.trim());
+
+                    if (pair.length !== 2) throw new Error("AI did not return a valid pair.");
+
+                    this.localState.aiGeneratedPair = pair;
+                    resultArea.innerHTML = `<p class="text-green-400">Generated: <span class="font-bold">${pair[0]}</span> & <span class="font-bold">${pair[1]}</span></p>`;
+
+                } catch (error) {
+                    console.error("AI Generation Error:", error);
+                    resultArea.innerHTML = `<p class="text-red-400">Failed to generate. Please try again.</p>`;
+                } finally {
+                    generateBtn.disabled = false;
+                }
+            }
+
+            // --- MODAL LOGIC ---
+            setupModalListeners() {
+                this.messageBoxContainer = document.getElementById('message-box-container');
+                this.messageBoxText = document.getElementById('message-box-text');
+                this.messageBoxCloseBtn = document.getElementById('message-box-close');
+                this.messageBoxCallback = null;
+
+                this.messageBoxCloseBtn.addEventListener('click', () => {
+                    this.messageBoxContainer.classList.remove('visible');
+                    if (this.messageBoxCallback) this.messageBoxCallback();
+                });
+
+                this.rejoinPromptContainer = document.getElementById('rejoin-prompt-container');
+                this.rejoinPromptText = document.getElementById('rejoin-prompt-text');
+                this.rejoinConfirmBtn = document.getElementById('rejoin-confirm-btn');
+                this.rejoinCancelBtn = document.getElementById('rejoin-cancel-btn');
+            }
+
+            showMessage(message, callback) {
+                this.messageBoxText.textContent = message;
+                this.messageBoxCallback = callback || null;
+                this.messageBoxContainer.classList.add('visible');
+            }
+
+            showRejoinPrompt(roomId, onConfirm, onCancel) {
+                this.rejoinPromptText.textContent = `You were in Room ${roomId}. Would you like to rejoin?`;
+                this.rejoinConfirmBtn.onclick = () => { this.rejoinPromptContainer.classList.remove('visible'); onConfirm(); };
+                this.rejoinCancelBtn.onclick = () => { this.rejoinPromptContainer.classList.remove('visible'); onCancel(); };
+                this.rejoinPromptContainer.classList.add('visible');
+            }
         }
-        
-        initializeGame();
+
+        // --- Start the game ---
+        window.onload = () => {
+            new WordWolfGame();
+        };
 
     </script>
 </body>
