@@ -155,6 +155,7 @@
                     roomUnsubscribe: null,
                     timerInterval: null,
                     aiGeneratedPair: null,
+                    loadingTimeout: null, // 読み込みタイムアウト用のID
                 };
                 
                 this.initialize();
@@ -164,10 +165,15 @@
              * Initializes Firebase and sets up authentication listener.
              */
             async initialize() {
+                // Set a timeout to show an error if loading takes too long
+                this.localState.loadingTimeout = setTimeout(() => {
+                    this.showMessage("読み込みに時間がかかっています。インターネット接続を確認して、ページを再読み込みしてください。");
+                }, 15000); // 15 seconds
+
                 try {
-                    // Use environment variables for Firebase config
-                    if (typeof __firebase_config === 'undefined') {
-                        throw new Error("Firebase configuration is missing.");
+                    // Use environment variables for Firebase config, with a more robust check
+                    if (typeof __firebase_config === 'undefined' || !__firebase_config) {
+                        throw new Error("Firebase configuration is missing or empty.");
                     }
                     const firebaseConfig = JSON.parse(__firebase_config);
                     
@@ -179,6 +185,7 @@
                     this.setupAuthListener();
 
                 } catch (error) {
+                    clearTimeout(this.localState.loadingTimeout); // Clear timeout on error
                     console.error("Initialization Error:", error);
                     this.showMessage(`Error: ${error.message}`, () => {
                         this.render(this.getHomeScreenHTML());
@@ -194,6 +201,7 @@
             setupAuthListener() {
                 onAuthStateChanged(this.auth, async (user) => {
                     if (user) {
+                        clearTimeout(this.localState.loadingTimeout); // Successfully authenticated, clear the loading timeout
                         this.localState.userId = user.uid;
                         this.handleUserAuthenticated();
                     } else {
@@ -206,7 +214,7 @@
                             }
                         } catch (error) {
                             console.error("Authentication failed:", error);
-                            this.showMessage("Could not sign in. Please refresh the page.");
+                            this.showMessage("サインインできませんでした。ページを再読み込みしてください。");
                         }
                     }
                 });
@@ -257,9 +265,6 @@
                 }
             }
             
-            // HTML template functions (getHomeScreenHTML, getWaitingRoomHTML, etc.)
-            // are largely unchanged from the original but are now methods of this class.
-            // ... (All get...HTML methods would be here) ...
             getHomeScreenHTML() {
                 return `
                     <div class="screen">
@@ -525,9 +530,6 @@
             
             // --- EVENT LISTENERS ---
 
-            /**
-             * Attaches event listeners for the home screen.
-             */
             addHomeListeners() {
                 document.getElementById('create-room-btn').addEventListener('click', () => this.createRoom());
                 document.getElementById('join-room-btn').addEventListener('click', () => this.joinRoom(null));
@@ -539,7 +541,6 @@
                 });
             }
             
-            // ... (All other add...Listeners methods would be here) ...
             addWaitingRoomListeners(room) {
                 if (this.localState.isHost) {
                     const settingsToWatch = ['language', 'wolf-count', 'turn-count', 'talk-time', 'final-talk-time', 'voting-time', 'topic'];
@@ -698,10 +699,6 @@
                 return doc(this.db, "rooms", roomId);
             }
 
-            /**
-             * Attaches a real-time listener to the current game room.
-             * @param {string} roomId - The ID of the room to listen to.
-             */
             attachRoomListener(roomId) {
                 this.localState.roomId = roomId;
                 if (this.localState.roomUnsubscribe) this.localState.roomUnsubscribe();
@@ -722,7 +719,6 @@
                         clearInterval(this.localState.timerInterval);
                     }
 
-                    // Host-only logic to check if all votes are in
                     if (this.localState.isHost && roomData.gameState === 'voting') {
                         const activePlayers = Object.values(roomData.players).filter(p => !p.isEliminated);
                         const votes = roomData.votes || {};
@@ -731,15 +727,10 @@
                         }
                     }
 
-                    // Main game state router
                     this.routeGameState(roomData);
                 });
             }
 
-            /**
-             * Routes the game to the correct UI and logic based on the current gameState.
-             * @param {object} roomData - The current data of the room from Firestore.
-             */
             routeGameState(roomData) {
                  switch (roomData.gameState) {
                     case 'waiting': 
@@ -785,7 +776,6 @@
                 }
             }
             
-            // ... (All other game logic methods: createRoom, joinRoom, startGame, etc.) ...
             async createRoom() {
                 if (!this.validatePlayerName()) return;
                 this.localState.isHost = true;
@@ -811,7 +801,7 @@
                         if(!joinId) { this.showMessage('Please enter a Room ID.'); return; }
                         roomId = joinId;
                     } else {
-                        return; // Can't join without an ID
+                        return;
                     }
                 }
                 if (!this.validatePlayerName()) return;
@@ -951,39 +941,34 @@
                 await runTransaction(this.db, async (transaction) => {
                     const freshRoomSnap = await transaction.get(roomRef);
                     if (!freshRoomSnap.exists() || freshRoomSnap.data().gameState !== 'voting') {
-                        return; // The state has changed, so stop this transaction.
+                        return;
                     }
                     const roomData = freshRoomSnap.data();
                     const players = roomData.players;
                     const votes = roomData.votes || {};
                     
-                    // 1. Tally the votes for each player.
                     const voteCounts = {};
                     Object.values(votes).forEach(votedForId => {
                         voteCounts[votedForId] = (voteCounts[votedForId] || 0) + 1;
                     });
 
-                    // 2. Determine the player(s) with the most votes from the active players.
                     let maxVotes = 0;
                     let mostVotedIds = [];
                     const activePlayers = Object.values(players).filter(p => !p.isEliminated);
 
                     activePlayers.forEach(player => {
-                        const count = voteCounts[player.id] || 0; // Get vote count, default to 0 if no votes.
+                        const count = voteCounts[player.id] || 0;
                         
                         if (count > maxVotes) {
                             maxVotes = count;
-                            mostVotedIds = [player.id]; // New leader, reset the list.
+                            mostVotedIds = [player.id];
                         } else if (count === maxVotes) {
-                            mostVotedIds.push(player.id); // It's a tie, add to the list.
+                            mostVotedIds.push(player.id);
                         }
                     });
 
-                    // 3. Determine the outcome.
                     let lastEliminatedId = null;
                     const updatedPlayers = { ...players };
-                    // A single player is eliminated only if they are the sole person with the most votes,
-                    // and the number of votes is greater than 0.
                     if (mostVotedIds.length === 1 && maxVotes > 0) {
                         lastEliminatedId = mostVotedIds[0];
                         if (updatedPlayers[lastEliminatedId]) {
@@ -991,12 +976,11 @@
                         }
                     }
                     
-                    // 4. Update the room state in Firestore.
                     transaction.update(roomRef, { 
                         gameState: 'results', 
                         lastEliminatedId: lastEliminatedId, 
                         players: updatedPlayers,
-                        votes: {} // Clear votes for the next round.
+                        votes: {}
                     });
                 });
             }
@@ -1031,7 +1015,6 @@
                         const currentRoomSnap = await getDoc(roomRef);
                         const currentRoom = currentRoomSnap.data();
 
-                        // Ensure we don't double-process if listener already caught it
                         if (currentRoom.gameState !== room.gameState) return;
 
                         switch (currentRoom.gameState) {
