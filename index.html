@@ -557,9 +557,24 @@
                             totalVotersEl.textContent = totalVoters;
                         }
 
-                        if (remaining <= 0 && localState.isHost && room.gameState === 'voting') {
+                        if (remaining <= 0 && localState.isHost) {
                             clearInterval(localState.timerInterval);
-                            await handleVoteTally(room);
+                            const roomRef = getRoomRef(room.id);
+                            const currentRoomSnap = await getDoc(roomRef);
+                            const currentRoom = currentRoomSnap.data();
+
+                            switch (currentRoom.gameState) {
+                                case 'talk_time':
+                                    await updateDoc(roomRef, { gameState: 'question_time' }); break;
+                                case 'final_talk_time':
+                                    const votingTime = currentRoom.settings.votingTime || 30;
+                                    const phaseEndTime = new Date(Date.now() + votingTime * 1000);
+                                    await updateDoc(roomRef, { gameState: 'voting', phaseEndTime }); break;
+                                case 'voting':
+                                    // This is now a fallback, the main logic is in the listener
+                                    await handleVoteTally(currentRoom);
+                                    break;
+                            }
                         }
                     }, 500);
                 }
@@ -726,15 +741,14 @@
                     await runTransaction(db, async (transaction) => {
                         const freshRoomSnap = await transaction.get(roomRef);
                         if (!freshRoomSnap.exists() || freshRoomSnap.data().gameState !== 'voting') {
-                            console.log("Tally aborted, game state is no longer 'voting'.");
                             return;
                         }
                         const players = freshRoomSnap.data().players;
                         const votes = freshRoomSnap.data().votes || {};
                         
                         const voteCounts = {};
-                        Object.values(players).filter(p => !p.isEliminated).forEach(p => {
-                            voteCounts[p.id] = 0;
+                        Object.keys(players).forEach(id => {
+                            voteCounts[id] = 0;
                         });
 
                         for (const voterId in votes) {
@@ -747,11 +761,13 @@
                         let maxVotes = -1;
                         let mostVotedIds = [];
                         for (const playerId in voteCounts) {
-                            if (voteCounts[playerId] > maxVotes) {
-                                maxVotes = voteCounts[playerId];
-                                mostVotedIds = [playerId];
-                            } else if (voteCounts[playerId] === maxVotes) {
-                                mostVotedIds.push(playerId);
+                            if (players[playerId] && !players[playerId].isEliminated) {
+                                if (voteCounts[playerId] > maxVotes) {
+                                    maxVotes = voteCounts[playerId];
+                                    mostVotedIds = [playerId];
+                                } else if (voteCounts[playerId] === maxVotes) {
+                                    mostVotedIds.push(playerId);
+                                }
                             }
                         }
                         
