@@ -99,7 +99,7 @@
     <div id="app-container">
         <div class="screen">
             <div class="card text-center">
-                <p class="text-2xl">Loading Game...</p>
+                <p id="loading-text" class="text-2xl">Loading Game...</p>
                  <div class="loader mt-4"></div>
             </div>
         </div>
@@ -139,14 +139,9 @@
          */
         class WordWolfGame {
             constructor() {
-                // Firebase services
                 this.db = null;
                 this.auth = null;
-
-                // DOM elements
                 this.appContainer = document.getElementById('app-container');
-                
-                // Local game state
                 this.localState = {
                     userId: null,
                     playerName: localStorage.getItem('playerName') || '',
@@ -155,7 +150,6 @@
                     roomUnsubscribe: null,
                     timerInterval: null,
                     aiGeneratedPair: null,
-                    loadingTimeout: null, // 読み込みタイムアウト用のID
                 };
                 
                 this.initialize();
@@ -165,17 +159,29 @@
              * Initializes Firebase and sets up authentication listener.
              */
             async initialize() {
-                // Set a timeout to show an error if loading takes too long
-                this.localState.loadingTimeout = setTimeout(() => {
-                    this.showMessage("読み込みに時間がかかっています。インターネット接続を確認して、ページを再読み込みしてください。");
-                }, 15000); // 15 seconds
-
                 try {
-                    // Use environment variables for Firebase config, with a more robust check
-                    if (typeof __firebase_config === 'undefined' || !__firebase_config) {
-                        throw new Error("Firebase configuration is missing or empty.");
+                    let firebaseConfig;
+                    // First, try to use the config provided by the collaborative environment.
+                    if (typeof __firebase_config !== 'undefined' && __firebase_config) {
+                        console.log("Using environment-provided Firebase config.");
+                        firebaseConfig = JSON.parse(__firebase_config);
+                    } else {
+                        // If not available (e.g., on Vercel), use the hardcoded fallback config.
+                        console.log("Using fallback Firebase configuration for Vercel/standalone deployment.");
+                        firebaseConfig = {
+                            apiKey: "AIzaSyDn4Opa-EY6Dm1ZZ1TAGAomTa2EJPjOXxQ",
+                            authDomain: "wordwolfononline.firebaseapp.com",
+                            projectId: "wordwolfononline",
+                            storageBucket: "wordwolfononline.appspot.com",
+                            messagingSenderId: "215407092675",
+                            appId: "1:215407092675:web:a2d2f71de0c71430e71376",
+                            measurementId: "G-BGJL4PKZ19"
+                        };
                     }
-                    const firebaseConfig = JSON.parse(__firebase_config);
+
+                    if (!firebaseConfig || !firebaseConfig.apiKey) {
+                         throw new Error("Firebase configuration is invalid or missing.");
+                    }
                     
                     const app = initializeApp(firebaseConfig);
                     this.db = getFirestore(app);
@@ -185,28 +191,20 @@
                     this.setupAuthListener();
 
                 } catch (error) {
-                    clearTimeout(this.localState.loadingTimeout); // Clear timeout on error
                     console.error("Initialization Error:", error);
-                    this.showMessage(`Error: ${error.message}`, () => {
-                        this.render(this.getHomeScreenHTML());
-                    });
+                    this.showMessage(`初期化エラー: ${error.message}`);
                 }
             }
             
             // --- AUTHENTICATION ---
-
-            /**
-             * Listens for changes in the user's authentication state.
-             */
             setupAuthListener() {
                 onAuthStateChanged(this.auth, async (user) => {
                     if (user) {
-                        clearTimeout(this.localState.loadingTimeout); // Successfully authenticated, clear the loading timeout
                         this.localState.userId = user.uid;
                         this.handleUserAuthenticated();
                     } else {
-                        // Sign in the user if they aren't already
                         try {
+                            // Use custom token if provided by the environment, otherwise sign in anonymously.
                             if (typeof __initial_auth_token !== 'undefined' && __initial_auth_token) {
                                 await signInWithCustomToken(this.auth, __initial_auth_token);
                             } else {
@@ -214,16 +212,12 @@
                             }
                         } catch (error) {
                             console.error("Authentication failed:", error);
-                            this.showMessage("サインインできませんでした。ページを再読み込みしてください。");
+                            this.showMessage("認証に失敗しました。ページを再読み込みしてください。");
                         }
                     }
                 });
             }
 
-            /**
-             * Handles logic after a user is successfully authenticated.
-             * Checks for existing rooms in URL or local storage.
-             */
             handleUserAuthenticated() {
                 const pathRoomId = window.location.pathname.split('/room/')[1];
                 const savedRoomId = localStorage.getItem('wordWolfRoomId');
@@ -244,18 +238,10 @@
             }
             
             // --- UI RENDERING & TEMPLATES ---
-
-            /**
-             * Renders HTML content into the main app container.
-             * @param {string} html - The HTML string to render.
-             */
             render(html) {
                 this.appContainer.innerHTML = html;
             }
 
-            /**
-             * Renders the initial home screen.
-             */
             renderHomeScreen() {
                 this.render(this.getHomeScreenHTML());
                 this.addHomeListeners();
