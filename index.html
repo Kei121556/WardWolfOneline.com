@@ -4,12 +4,10 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Word Wolf Game</title>
-    <!-- SEO: Add a description for search engines -->
     <meta name="description" content="Word Wolf is a real-time multiplayer word guessing game. Find the player who has a slightly different word from everyone else!">
     
     <script src="https://cdn.tailwindcss.com"></script>
     
-    <!-- Performance: Load fonts asynchronously to prevent render blocking -->
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link rel="preload" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;700&family=Noto+Sans+JP:wght@400;500;700&display=swap" as="style" onload="this.onload=null;this.rel='stylesheet'">
@@ -105,7 +103,6 @@
         </div>
     </div>
 
-    <!-- Modals -->
     <div id="message-box-container" class="modal-container">
         <div class="modal-box">
             <p id="message-box-text" class="modal-text"></p>
@@ -351,14 +348,12 @@
                                             <option value="custom" ${room.settings.topic === 'custom' ? 'selected' : ''}>Custom</option>
                                         </select>
                                     </div>
-                                    <!-- AI Choice Area -->
                                     <div id="ai-choice-area" class="hidden space-y-2">
                                         <label for="ai-category" class="font-medium">Select a category for AI</label>
                                         <select id="ai-category" class="form-select">${topicOptionsHTML}</select>
                                         <button id="generate-ai-btn" class="btn btn-secondary w-full">Generate with AI</button>
                                         <div id="ai-result-area" class="text-center p-2"></div>
                                     </div>
-                                    <!-- Custom Topic Area -->
                                     <div id="custom-topic-area" class="hidden space-y-2">
                                         <label for="custom-category-name" class="font-medium">Custom Category Name</label>
                                         <input id="custom-category-name" type="text" class="form-input" placeholder="e.g., Marvel Superheroes">
@@ -705,14 +700,6 @@
                         clearInterval(this.localState.timerInterval);
                     }
 
-                    if (this.localState.isHost && roomData.gameState === 'voting') {
-                        const activePlayers = Object.values(roomData.players).filter(p => !p.isEliminated);
-                        const votes = roomData.votes || {};
-                        if (Object.keys(votes).length >= activePlayers.length) {
-                            this.handleVoteTally(roomData);
-                        }
-                    }
-
                     this.routeGameState(roomData);
                 });
             }
@@ -922,55 +909,6 @@
                 });
             }
 
-            async handleVoteTally(room) {
-                const roomRef = this.getRoomRef(room.id);
-                await runTransaction(this.db, async (transaction) => {
-                    const freshRoomSnap = await transaction.get(roomRef);
-                    if (!freshRoomSnap.exists() || freshRoomSnap.data().gameState !== 'voting') {
-                        return;
-                    }
-                    const roomData = freshRoomSnap.data();
-                    const players = roomData.players;
-                    const votes = roomData.votes || {};
-                    
-                    const voteCounts = {};
-                    Object.values(votes).forEach(votedForId => {
-                        voteCounts[votedForId] = (voteCounts[votedForId] || 0) + 1;
-                    });
-
-                    let maxVotes = 0;
-                    let mostVotedIds = [];
-                    const activePlayers = Object.values(players).filter(p => !p.isEliminated);
-
-                    activePlayers.forEach(player => {
-                        const count = voteCounts[player.id] || 0;
-                        
-                        if (count > maxVotes) {
-                            maxVotes = count;
-                            mostVotedIds = [player.id];
-                        } else if (count === maxVotes) {
-                            mostVotedIds.push(player.id);
-                        }
-                    });
-
-                    let lastEliminatedId = null;
-                    const updatedPlayers = { ...players };
-                    if (mostVotedIds.length === 1 && maxVotes > 0) {
-                        lastEliminatedId = mostVotedIds[0];
-                        if (updatedPlayers[lastEliminatedId]) {
-                            updatedPlayers[lastEliminatedId].isEliminated = true;
-                        }
-                    }
-                    
-                    transaction.update(roomRef, { 
-                        gameState: 'results', 
-                        lastEliminatedId: lastEliminatedId, 
-                        players: updatedPlayers,
-                        votes: {}
-                    });
-                });
-            }
-
             handlePhaseTimer(room) {
                 if (this.localState.timerInterval) clearInterval(this.localState.timerInterval);
                 const timerDisplay = document.getElementById('timer-display');
@@ -1010,9 +948,6 @@
                                 const votingTime = currentRoom.settings.votingTime || 30;
                                 const phaseEndTime = new Date(Date.now() + votingTime * 1000);
                                 await updateDoc(roomRef, { gameState: 'voting', phaseEndTime }); break;
-                            case 'voting':
-                                await this.handleVoteTally(currentRoom);
-                                break;
                         }
                     }
                 }, 500);
