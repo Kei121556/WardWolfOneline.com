@@ -158,12 +158,10 @@
             async initialize() {
                 try {
                     let firebaseConfig;
-                    // First, try to use the config provided by the collaborative environment.
                     if (typeof __firebase_config !== 'undefined' && __firebase_config) {
                         console.log("Using environment-provided Firebase config.");
                         firebaseConfig = JSON.parse(__firebase_config);
                     } else {
-                        // If not available (e.g., on Vercel), use the hardcoded fallback config.
                         console.log("Using fallback Firebase configuration for Vercel/standalone deployment.");
                         firebaseConfig = {
                             apiKey: "AIzaSyDn4Opa-EY6Dm1ZZ1TAGAomTa2EJPjOXxQ",
@@ -201,7 +199,6 @@
                         this.handleUserAuthenticated();
                     } else {
                         try {
-                            // Use custom token if provided by the environment, otherwise sign in anonymously.
                             if (typeof __initial_auth_token !== 'undefined' && __initial_auth_token) {
                                 await signInWithCustomToken(this.auth, __initial_auth_token);
                             } else {
@@ -429,11 +426,18 @@
                 if (me.isEliminated || (room.votes && room.votes[this.localState.userId])) {
                     return `<div class="screen"><div class="card text-center"><p class="text-xl">Vote complete. Waiting for others...</p></div></div>`;
                 }
-                const sortedPlayers = Object.values(room.players).sort((a, b) => a.joinedAt - b.joinedAt);
-                const voteButtonsHTML = sortedPlayers
-                    .filter(p => !p.isEliminated)
-                    .map(p => `<button class="btn btn-secondary w-full" data-vote-id="${p.id}" data-vote-name="${p.name}" ${p.id === this.localState.userId ? 'disabled' : ''}>${p.name}</button>`)
+
+                // ★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★
+                // ★★★                 バグ修正箇所                 ★★★
+                // ★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★
+                // Object.values()ではプレイヤーID(キー)が失われてしまうため、Object.entries()を使い、
+                // [キー, 値] のペアの配列に変換してからボタンを生成します。
+                const voteButtonsHTML = Object.entries(room.players)
+                    .filter(([key, p]) => !p.isEliminated) // 追放されていないプレイヤーのみを対象にする
+                    .sort(([keyA, pA], [keyB, pB]) => pA.joinedAt - pB.joinedAt) // 参加順でソート
+                    .map(([key, p]) => `<button class="btn btn-secondary w-full" data-vote-id="${key}" data-vote-name="${p.name}" ${key === this.localState.userId ? 'disabled' : ''}>${p.name}</button>`)
                     .join('');
+
                 return `
                     <div class="screen">
                         <div class="card text-center">
