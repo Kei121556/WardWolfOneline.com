@@ -122,9 +122,6 @@
         import { getFirestore, doc, setDoc, getDoc, updateDoc, onSnapshot, runTransaction, collection, getDocs, writeBatch, deleteDoc } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
         import { getAuth, signInAnonymously, onAuthStateChanged, signInWithCustomToken } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
 
-        // ★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★
-        // ★★★              カテゴリ分割 修正箇所             ★★★
-        // ★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★
         const TOPICS_EN = { 
             food: [["Curry", "Stew"], ["Udon", "Soba"], ["Beer", "Low-malt Beer"], ["Apple", "Pear"], ["Macaron", "Fatcaron"], ["Sushi", "Sashimi"], ["Coffee", "Tea"], ["Steak", "Hamburger"], ["Pasta", "Pizza"], ["Pancake", "Waffle"], ["Chocolate", "Caramel"], ["Cheese", "Butter"]], 
             places: [["Tokyo Tower", "Skytree"], ["Disneyland", "DisneySea"], ["Kinkaku-ji", "Ginkaku-ji"], ["Ocean", "River"], ["Convenience Store", "Supermarket"], ["Mountain", "Volcano"], ["School", "Hospital"], ["Museum", "Art Gallery"], ["Airport", "Train Station"], ["Park", "Garden"], ["Library", "Bookstore"], ["Cafe", "Restaurant"]], 
@@ -306,9 +303,8 @@
                                 <div>
                                     <h2 class="text-xl font-bold mb-2 text-violet-400">Credits</h2>
                                     <div class="text-gray-400 text-sm text-center space-y-1">
-                                        <p>Game Director: Kei</p>
-                                        <p>Development: KY</p>
-                                        <p>Development Support: Gemini</p>
+                                        <p>Creator: KY</p>
+                                        <p>Special Thanks: Kei & Gemini</p>
                                     </div>
                                 </div>
                                 <button id="back-to-home-btn" class="btn btn-primary w-full mt-4">Back</button>
@@ -996,7 +992,7 @@
                 const prompt = `For the game 'Word Wolf', generate a single, clever pair of words from the category '${categoryName}'. The words should be very similar but have a subtle difference. Respond with only the two words separated by a comma, without any extra text or formatting. For example: Curry,Stew`;
                 
                 try {
-                    const apiKey = ""; // Provided by environment
+                    const apiKey = ""; 
                     const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-preview-05-20:generateContent?key=${apiKey}`;
                     const payload = { contents: [{ parts: [{ text: prompt }] }] };
 
