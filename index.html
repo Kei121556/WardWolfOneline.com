@@ -122,9 +122,6 @@
         import { getFirestore, doc, setDoc, getDoc, updateDoc, onSnapshot, runTransaction, collection, getDocs, writeBatch, deleteDoc } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
         import { getAuth, signInAnonymously, onAuthStateChanged, signInWithCustomToken } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
 
-        // ★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★
-        // ★★★              カテゴリ分割 修正箇所             ★★★
-        // ★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★
         const TOPICS_EN = { 
             food: [["Curry", "Stew"], ["Udon", "Soba"], ["Beer", "Low-malt Beer"], ["Apple", "Pear"], ["Macaron", "Fatcaron"], ["Sushi", "Sashimi"], ["Coffee", "Tea"], ["Steak", "Hamburger"], ["Pasta", "Pizza"], ["Pancake", "Waffle"], ["Chocolate", "Caramel"], ["Cheese", "Butter"]], 
             places: [["Tokyo Tower", "Skytree"], ["Disneyland", "DisneySea"], ["Kinkaku-ji", "Ginkaku-ji"], ["Ocean", "River"], ["Convenience Store", "Supermarket"], ["Mountain", "Volcano"], ["School", "Hospital"], ["Museum", "Art Gallery"], ["Airport", "Train Station"], ["Park", "Garden"], ["Library", "Bookstore"], ["Cafe", "Restaurant"]], 
@@ -141,7 +138,7 @@
             history: [["Rome", "Greece"], ["Knight", "Samurai"], ["Pyramid", "Sphinx"], ["World War I", "World War II"], ["Renaissance", "Industrial Revolution"], ["Castle", "Fortress"], ["Viking", "Pirate"], ["Dinosaur", "Mammoth"], ["King", "Emperor"], ["Revolution", "Rebellion"], ["Napoleon", "Caesar"], ["Cleopatra", "Joan of Arc"]], 
             jobs: [["Doctor", "Nurse"], ["Police Officer", "Firefighter"], ["Baker", "Pâtissier"], ["Pilot", "Cabin Attendant"], ["Lawyer", "Prosecutor"], ["Writer", "Journalist"], ["Designer", "Architect"], ["Farmer", "Fisherman"], ["Singer", "Dancer"], ["Engineer", "Mechanic"], ["Photographer", "Videographer"], ["Librarian", "Curator"]], 
             colors: [["Red", "Pink"], ["Black", "Navy"], ["Gold", "Silver"], ["Orange", "Brown"], ["Green", "Lime"], ["Blue", "Sky Blue"], ["Purple", "Lavender"], ["White", "Ivory"], ["Gray", "Charcoal"], ["Beige", "Cream"], ["Turquoise", "Teal"], ["Magenta", "Fuchsia"]],
-            uk_landmarks: [["Big Ben", "Tower of London"], ["Buckingham Palace", "Windsor Castle"], ["Stonehenge", "Hadrian's Wall"], ["The British Museum", "The National Gallery"], ["Tower Bridge", "London Bridge"], ["Edinburgh Castle", "Cardiff Castle"], ["London Eye", "The Shard"], ["Oxford University", "Cambridge University"], ["Thames River", "River Severn"]],
+            uk_landmarks: [["Big Ben", "Tower of London"], ["Buckingham Palace", "Windsor Castle"], ["Stonehenge", "Hadrian's Wall"], ["The British Museum", "The National Gallery"], ["Tower Bridge", "London Bridge"], ["Edinburgh Castle", "Cardiff Castle"], ["London Eye", "The Shard"], ["Oxford University", "Cambridge University"], ["Thames River", "River Severn"], ["Borough Market", "Harrods"]],
             uk_food: [["Fish and Chips", "Shepherd's Pie"], ["Tea", "Afternoon Tea"], ["Scone", "Crumpet"], ["Gin", "Whisky"], ["Cheddar cheese", "Stilton cheese"], ["Jaffa Cakes", "Digestive Biscuits"]],
             uk_culture: [["The Beatles", "The Rolling Stones"], ["Queen", "Oasis"], ["Sherlock Holmes", "James Bond"], ["Harry Potter", "The Lord of the Rings"], ["King Arthur", "Robin Hood"], ["Shakespeare", "Charles Dickens"], ["Paddington Bear", "Winnie-the-Pooh"]],
             uk_sports_politics: [["Football", "Rugby"], ["Wimbledon", "The Open Championship"], ["House of Commons", "House of Lords"], ["Prince", "Princess"]],
