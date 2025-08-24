@@ -130,10 +130,6 @@
         const TOPIC_NAMES_EN = { food: "Food & Drink", places: "Places", people: "People", actions: "Actions", things: "Things", sports: "Sports", entertainment: "Entertainment", animals: "Animals", nature: "Nature", tech: "Technology", fantasy: "Fantasy", games: "Games", history: "History", jobs: "Jobs", colors: "Colors", uk: "About the UK" };
         const TOPIC_NAMES_JA = { food: "食べ物・飲み物", places: "場所", people: "人物", actions: "行動", things: "モノ", sports: "スポーツ", entertainment: "エンタメ", animals: "動物", nature: "自然", tech: "テクノロジー", fantasy: "ファンタジー", games: "ゲーム", history: "歴史", jobs: "職業", colors: "色", uk: "イギリス関連" };
 
-        /**
-         * The main class that orchestrates the Word Wolf game.
-         * It handles Firebase initialization, authentication, UI rendering, and game logic.
-         */
         class WordWolfGame {
             constructor() {
                 this.db = null;
@@ -152,9 +148,6 @@
                 this.initialize();
             }
 
-            /**
-             * Initializes Firebase and sets up authentication listener.
-             */
             async initialize() {
                 try {
                     let firebaseConfig;
@@ -191,7 +184,6 @@
                 }
             }
             
-            // --- AUTHENTICATION ---
             setupAuthListener() {
                 onAuthStateChanged(this.auth, async (user) => {
                     if (user) {
@@ -231,7 +223,6 @@
                 }
             }
             
-            // --- UI RENDERING & TEMPLATES ---
             render(html) {
                 this.appContainer.innerHTML = html;
             }
@@ -426,15 +417,10 @@
                 if (me.isEliminated || (room.votes && room.votes[this.localState.userId])) {
                     return `<div class="screen"><div class="card text-center"><p class="text-xl">Vote complete. Waiting for others...</p></div></div>`;
                 }
-
-                // ★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★
-                // ★★★                 バグ修正箇所                 ★★★
-                // ★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★
-                // Object.values()ではプレイヤーID(キー)が失われてしまうため、Object.entries()を使い、
-                // [キー, 値] のペアの配列に変換してからボタンを生成します。
+                
                 const voteButtonsHTML = Object.entries(room.players)
-                    .filter(([key, p]) => !p.isEliminated) // 追放されていないプレイヤーのみを対象にする
-                    .sort(([keyA, pA], [keyB, pB]) => pA.joinedAt - pB.joinedAt) // 参加順でソート
+                    .filter(([key, p]) => !p.isEliminated)
+                    .sort(([keyA, pA], [keyB, pB]) => pA.joinedAt - pB.joinedAt)
                     .map(([key, p]) => `<button class="btn btn-secondary w-full" data-vote-id="${key}" data-vote-name="${p.name}" ${key === this.localState.userId ? 'disabled' : ''}>${p.name}</button>`)
                     .join('');
 
@@ -482,7 +468,13 @@
 
             getWolfGuessHTML(room) {
                 const guessingWolf = room.players[room.lastEliminatedId];
-                const isMyTurn = this.localState.userId === guessingWolf.id;
+                // ★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★
+                // ★★★                 バグ修正箇所                 ★★★
+                // ★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★
+                // guessingWolfオブジェクトに.idプロパティは存在しないため、
+                // 自分のID(this.localState.userId)と追放されたID(room.lastEliminatedId)を直接比較します。
+                const isMyTurn = this.localState.userId === room.lastEliminatedId;
+
                 return `
                     <div class="screen">
                         <div class="card text-center">
@@ -957,8 +949,6 @@
                 }, 500);
             }
             
-            // --- HELPER & UTILITY FUNCTIONS ---
-
             validatePlayerName() {
                 const nameInput = document.getElementById('player-name-input');
                 if (!nameInput) return true;
@@ -1024,7 +1014,6 @@
                 }
             }
 
-            // --- MODAL LOGIC ---
             setupModalListeners() {
                 this.messageBoxContainer = document.getElementById('message-box-container');
                 this.messageBoxText = document.getElementById('message-box-text');
@@ -1056,7 +1045,6 @@
             }
         }
 
-        // --- Start the game ---
         window.onload = () => {
             new WordWolfGame();
         };
