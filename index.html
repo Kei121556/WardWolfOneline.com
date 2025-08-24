@@ -122,6 +122,9 @@
         import { getFirestore, doc, setDoc, getDoc, updateDoc, onSnapshot, runTransaction, collection, getDocs, writeBatch, deleteDoc } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
         import { getAuth, signInAnonymously, onAuthStateChanged, signInWithCustomToken } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
 
+        // ★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★
+        // ★★★              カテゴリ分割 修正箇所             ★★★
+        // ★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★
         const TOPICS_EN = { 
             food: [["Curry", "Stew"], ["Udon", "Soba"], ["Beer", "Low-malt Beer"], ["Apple", "Pear"], ["Macaron", "Fatcaron"], ["Sushi", "Sashimi"], ["Coffee", "Tea"], ["Steak", "Hamburger"], ["Pasta", "Pizza"], ["Pancake", "Waffle"], ["Chocolate", "Caramel"], ["Cheese", "Butter"]], 
             places: [["Tokyo Tower", "Skytree"], ["Disneyland", "DisneySea"], ["Kinkaku-ji", "Ginkaku-ji"], ["Ocean", "River"], ["Convenience Store", "Supermarket"], ["Mountain", "Volcano"], ["School", "Hospital"], ["Museum", "Art Gallery"], ["Airport", "Train Station"], ["Park", "Garden"], ["Library", "Bookstore"], ["Cafe", "Restaurant"]], 
